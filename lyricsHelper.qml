@@ -518,20 +518,22 @@ MuseScore
     {
 
     }
+    
+    function convertLineBreak(x) { return x.replace(/\n/g, "<br />"); }
 
     function updateDisplay() //update display to lrcDisplay.text
     {
         if(lrcCursor == 0)
         {
-            lrcDisplay.text = "<b>" + lrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + lrc.slice(1) + "</font>";
+            lrcDisplay.text = convertLineBreak("<b>" + lrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + lrc.slice(1) + "</font>");
         }
         else if(lrcCursor == lrc.length - 1)
         {
-            lrcDisplay.text = "<font color=\"grey\">" + lrc.slice(0, current) + "</font>" + "<b>" + lrc.slice(current) + "</b>";
+            lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, current) + "</font>" + "<b>" + lrc.slice(current) + "</b>");
         }
         else
         {
-             lrcDisplay.text = "<font color=\"grey\">" + lrc.slice(0,lrcCursor) + "</font>" + "<b>" + lrc.slice(lrcCursor, lrcCursor + 1) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor + 1) + "</font>";
+             lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor) + "</font>" + "<b>" + lrc.slice(lrcCursor, lrcCursor + 1) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor + 1) + "</font>");
         }
     }
 
