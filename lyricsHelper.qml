@@ -395,9 +395,10 @@ MuseScore
             var nextCursor = cursor; nextCursor.next();
             if(nextCursor.element == null) //if reaches the score EOF
             {
-                if(getSelectedCursor().element.lyrics.length == 1) //if there already been lyrcis on the next element, do nothing
+                if(getSelectedCursor().element.lyrics.length == 1) //if there already been lyrcis on the next element, do nothing and deselect
                 {
-                    console.log("EOF detected, you can't add more lyrics");
+                    console.log("400: EOF detected, you can't add more lyrics");
+                    curScore.selection.clear();
                     return false;
                 }
                 else //if no lyrics on the current note, add it but no future cursor is forwarded.
@@ -407,7 +408,7 @@ MuseScore
                     fill.text = character;
                     fill.voice = getSelectedCursor().voice;
                     curScore.startCmd();
-                        console.log("410: current character = " + fill.text);
+                        console.log("411: current character = " + fill.text);
                         getSelectedCursor().element.add(fill);
                     curScore.endCmd();
                     nextChar();
@@ -428,7 +429,7 @@ MuseScore
                 cursor.element.add(fill);
                 var tempTick = cursor.tick;
                 cursor.next();
-                console.log("431: Next Selection is " + nextCursor.element.type);
+                console.log("432: Next Selection is " + nextCursor.element.type);
                 //if the next element is not a note
                 if(cursor.element.type != 93) 
                 {
@@ -438,15 +439,49 @@ MuseScore
                         while(cursor.element.type != 93) // wind forward until detecting a valid note
                         {
                             cursor.next();
-                            console.log("441: Rest detected, move to next selection: " + nameElementType(cursor.element) + " at " + cursor.tick);
-                            if(nextCursor.element == null) 
+                            console.log("442: Rest detected, move to next selection: " + nameElementType(cursor.element) + " at " + cursor.tick);
+                            if(cursor.element == null) 
                             {
-                                console.log("444: EOF detected, close the lyrics input process");
+                                console.log("445: EOF detected, close the lyrics input process");
                                 cursor.rewindToTick(tempTick);//corner case: tail of score are rests:
                                 if(cursor.element.lyrics.length > 1) removeElement(cursor.element.lyrics[1]);
                                 curScore.selection.clear();
                                 curScore.endCmd();
                                 return false;//encounters the EOF, immediately shut down
+                            }
+                        }
+                    }
+                }
+                var nextNote = cursor.element.notes[0];
+                //if the next note is a tied note
+                if(nextNote.tieBack != null)
+                {
+                    curScore.selection.select(nextNote.lastTiedNote);
+                    console.log("460: Tied Note detected, move to tied note's tail at " + cursor.tick);
+                    cursor.next();
+                    if(cursor.element == null)//corner case: the element after the tail of the tied note is score EOF, deselect and shut down.
+                    {
+                        console.log("464: EOF detected, you can't add more lyrics");
+                        curScore.selection.clear();
+                        return false;
+                    }
+                    if(cursor.element.type != 93) //corner case: the element after the tail of the tied note is a rest
+                    {
+                        var exceptionType = cursor.element.type;
+                        if(exceptionType == 25) //if the next element is a rest.
+                        {
+                            while(cursor.element.type != 93) // wind forward until detecting a valid note
+                            {
+                                cursor.next();
+                                console.log("476: Rest detected, move to next selection: " + nameElementType(cursor.element) + " at " + cursor.tick);
+                                if(nextCursor.element == null) 
+                                {
+                                    console.log("479: EOF detected, close the lyrics input process");
+                                    //corner corner case = = : after-tail of tied notes's elements are rests and also extend to the EOF:
+                                    curScore.selection.clear();
+                                    curScore.endCmd();
+                                    return false;//encounters the EOF, immediately shut down
+                                }
                             }
                         }
                     }
@@ -465,13 +500,23 @@ MuseScore
         if(cursor && (cursor.element.lyrics.length == 1))
         {
             var existed = cursor.element.lyrics[0].text;
-            console.log("r");
+            console.log("Syllable to be prolonged: " + existed);
+            var prolonged = existed + "_";
+            
+            //var fill = newElement(Element.LYRICS);
+            //fill.text = prolonged;
+            //fill.voice = cursor.voice;
+            curScore.startCmd();
+                cursor.element.lyrics[0].setSyllabic(MIDDLE);
+                //removeElement(cursor.element.lyrics[0]);
+                //cursor.element.add(fill);
+            curScore.endCmd();
         }
     }
 
-    function addPolysyllable(cursor)
+    function addSynalepha(cursor)
     {
-        
+
     }
 
     function updateDisplay() //update display to lrcDisplay.text
@@ -594,7 +639,7 @@ MuseScore
                 text: "多音"
                 onClicked:
                 {
-                    addPolysyllable(getSelectedCursor());
+                    addSynalepha(getSelectedCursor());
                 }
             }
         }
