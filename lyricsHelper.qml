@@ -1,3 +1,12 @@
+//==============================================
+//  Lyrics Helper
+//  Copyright (🄯) 2021 Snake4Y5H
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 2
+//  as published by the Free Software Foundation and appearing in
+//  the file LICENCE.GPL
+//==============================================
 import QtQuick 2.2
 import QtQuick.Dialogs 1.2
 import QtQuick.Controls 2.00
@@ -572,7 +581,7 @@ MuseScore
         }
         else if(lrcCursor == lrc.length - 1)
         {
-            lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, current) + "</font>" + "<b>" + lrc.slice(current) + "</b>");
+            lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, lrcCursor) + "</font>" + "<b>" + lrc.slice(lrcCursor) + "</b>");
         }
         else
         {
@@ -605,7 +614,7 @@ MuseScore
     function prevChar() //stepping the @lrcCursor back by a char, same structure as the nextChar() above
     {
         var prev = lrcCursor - 1;
-        if(prev <= lrc.length) //loops back to the begining if the @lrcCursor reaches begining.
+        if(prev <= 0) //loops back to the begining if the @lrcCursor reaches begining.
         { 
             lrcCursor = lrc.length - 1; return false;
         }
@@ -632,12 +641,12 @@ MuseScore
             id: lyricSourceControl
             columns: 2
             rows: 1
-            spacing: 4
+            spacing: 2
             Text 
             {
                 id: lyricSource
                 height: parent.height
-                width: inputButtons.width - buttonOpenFile.width
+                width: inputButtons.width - lrcStepForwardButton.width
                 wrapMode: Text.WrapAnywhere
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignRight
@@ -646,8 +655,8 @@ MuseScore
             Button 
             {
                 id : buttonOpenFile
-                width: syllableButton.width/4
-                text: qsTr("...")
+                width: syllableButton.width/5
+                text: "..."
                 onClicked: {
                      fileDialog.open();
                 }
@@ -656,14 +665,25 @@ MuseScore
         Grid
         {
             id: inputButtons
-            columns: 3
+            columns: 5
             rows: 1
-            spacing: 4
+            spacing: 2
             enabled: false
+            Button
+            {
+                id: lrcStepBackButton
+                text: "<font size=\"6\">◀</font>"
+                width: syllableButton.width/6
+                onClicked:
+                {
+                    prevChar();
+                    updateDisplay();
+                }
+            }
             Button 
             {
                 id: syllableButton
-                text: "单音"
+                text: "单音\nSyllable"
                 onClicked:
                 {   
                     addSyllable(getSelectedCursor());
@@ -672,7 +692,7 @@ MuseScore
             Button 
             {
                 id: melismaButton
-                text: "转音"
+                text: "转音\nMelisma"
                 onClicked:
                 {
                     addMelisma(getSelectedCursor());
@@ -681,10 +701,21 @@ MuseScore
             Button 
             {
                 id: synalephaButton
-                text: "多音"
+                text: "多音\nSynalepha"
                 onClicked:
                 {
                     addSynalepha(getSelectedCursor());
+                }
+            }
+            Button
+            {
+                id: lrcStepForwardButton
+                text: "<font size=\"6\">▶</font>"
+                width: syllableButton.width/6
+                onClicked:
+                {
+                    nextChar();
+                    updateDisplay();
                 }
             }
         }
