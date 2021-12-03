@@ -211,9 +211,11 @@ MuseScore
             //wrap the actions in startCmd() and endCmd() for real-time reactions from the score. 
             //Sepcial Thanks to Jojo-Schmitz https://musescore.org/en/node/326916
             curScore.startCmd();
-                console.log("current character = " + fill.text);
+                console.log("addSyllable(): current character = " + fill.text);
+                var tempTick = cursor.tick;
                 if(cursor.element.lyrics.length > 0) //if replaceMode is ON, replace the existed character
                 {
+                    console.log("addSyllable(): conflicted lyrics detected!");
                     if(replaceMode == 1)
                     {
                         removeElement(cursor.element.lyrics[0]);
@@ -224,8 +226,32 @@ MuseScore
                         return false;
                     }
                 }
+                if(isInsideMelismaLine(cursor)) //if replaceMode is ON, and selection is inside a melisma line, cut the line and add the character
+                {
+                    console.log("addSyllable(): conflicted melisma line detected!");
+                    if(replaceMode == 1)
+                    {
+                        var checkLength = 0;
+                        do
+                        {
+                            cursor.prev();
+                            checkLength += durationTo64(cursor.element.duration);
+                        }while(durationTo64(cursor.element.lyrics[0].lyricTicks) == 0) 
+                        cursor.element.lyrics[0].lyricTicks = fraction(checkLength, 64);
+                    }
+                    else
+                    {
+                        curScore.endCmd();
+                        return false;
+                    }
+                }
+                cursor.rewindToTick(tempTick);
+                if(cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) //if selected note is inside a tie, jump to the begining of the tie
+                {
+                    curScore.selection.select(cursor.element.notes[0].firstTiedNote);
+                    cursor = getSelectedCursor();
+                }
                 cursor.element.add(fill);
-                var tempTick = cursor.tick;
                 cursor.next();
                 console.log("addSyllable(): Next Selection is " + nextCursor.element.type);
                 //if the next element is not a note
@@ -290,6 +316,7 @@ MuseScore
             nextChar();
             updateDisplay();
             console.log("------------addSyllable() end-------------");
+            return true;
        }
     }
 
@@ -326,7 +353,15 @@ MuseScore
             //check if the current note already has lyrics, it will cause conflicts in this case
             if(cursor.element.lyrics.length != 0)
             {
-                console.log("addMelisma(): Lyrics conflict detected, do nothing"); return false;
+                if(replaceMode == 1)//depends on whether replace mode is ON or OFF. If ON, current lyrics will be dropped and become melisma line
+                {
+                    console.log("addMelisma(): Lyrics conflict detected, drop existed lyrics");
+                    removeElement(cursor.element.lyrics[0]);
+                }
+                else
+                {
+                    console.log("addMelisma(): Lyrics conflict detected, do nothing"); return false;
+                }
             }
             //other things need to be checked for the prev note to avoid glitches
             cursor.prev();
@@ -391,6 +426,7 @@ MuseScore
                 curScore.selection.select(cursor.element.notes[0]);//move selection to the next note
             curScore.endCmd();
             console.log("------------addMelisma() end-------------");
+            return true;
         }
     }
 
@@ -398,10 +434,130 @@ MuseScore
     {
         if (cursor) 
         {
+            var tempTick = cursor.tick;
+            var character = lrc.charAt(lrcCursor);
+            //if current notes has lyrics already, concatenate the character to the original one right away.
+            if(cursor.element.lyrics.length == 1)
+            {
+                curScore.startCmd();
+                    console.log("addSynalepha(): character to be added: " + character);
+                    var concatenated = cursor.element.lyrics[0].text + character;
+                    cursor.element.lyrics[0].text = concatenated;
+                    nextChar();
+                    updateDisplay();
+                curScore.endCmd();
+                return true;
+            }
             //in the case of current selected note has no lyrics but the pervious has lyrics (MOST LIKELY it's in the middle of the editing),
             //add Synalepha to the previous character
-            if(cursor.element)
+            if(cursor.element.lyrics.length == 0)
+            {
+                do
+                {
+                    cursor.prev();
+                    if(cursor.element == null) //check if reach the filehead, dump the character to the original selection
+                    {
+                        console.log("addSynalepha(): Filehead detected, dump character " + character + " to the original selected note");
+                        curScore.startCmd();
+                            var fill = newElement(Element.LYRICS);
+                            fill.text = character;
+                            fill.voice = cursor.voice;
+                            cursor.rewindToTick(tempTick);
+                            cursor.element.add(fill);
+                            nextChar();
+                            updateDisplay();
+                        curScore.endCmd();
+                        return true;
+                    }
+                } while(cursor.element.type != 93) //if no notes were found before the selection, cursor will eventually reach the filehead.
+                //assume we found a note
+                if(cursor.element.lyrics.length == 1)
+                {
+                    curScore.startCmd();
+                        console.log("addSynalepha(): character to be added: " + character);
+                        var concatenated = cursor.element.lyrics[0].text + character;
+                        cursor.element.lyrics[0].text = concatenated;
+                        nextChar();
+                        updateDisplay();
+                    curScore.endCmd();
+                    return true;
+                }
+                else //if we found a note but that note has no lyrics ()
+                {
+                    var tempTick2 = cursor.tick; //backup cursor's position before calling isInsideMelismaLine(cursor)
+                    //if that note has no lyrics but inside a melisma line, dump the character to the begining of the melisma line
+                    if(isInsideMelismaLine(cursor)) 
+                    {
+                        while(durationTo64(cursor.element.lyrics[0].lyricTicks) == 0) {cursor.prev();}
+                        curScore.startCmd();
+                            console.log("addSynalepha(): Note inside a melisma line detected, character to be added at the begining of melisma line: " + character);
+                            var concatenated = cursor.element.lyrics[0].text + character;
+                            cursor.element.lyrics[0].text = concatenated;
+                            nextChar();
+                            updateDisplay();
+                        curScore.endCmd();
+                        return true;
+                    }
+                    //if that note is inside a tied note, dump the character to the begining of the tie
+                    cursor.rewindToTick(tempTick2);
+                    if(cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) 
+                    {
+                        curScore.startCmd();
+                            curScore.selection.select(cursor.element.notes[0].firstTiedNote);
+                            cursor = getSelectedCursor();
+                            if(cursor.element.lyrics.length == 0)
+                            {
+                                console.log("addSynalepha(): Note inside a tie detected, character to be dumped at the begining of the tie: " + character);
+                                var fill = newElement(Element.LYRICS);
+                                fill.text = character;
+                                fill.voice = cursor.voice;
+                                cursor.element.add(fill);
+                            }
+                            else
+                            {
+                                console.log("addSynalepha(): Note inside a tie detected, character to be added at the begining of the tie: " + character);
+                                var concatenated = cursor.element.lyrics[0].text + character;
+                                cursor.element.lyrics[0].text = concatenated;
+                            }
+                            nextChar();
+                            updateDisplay();
+                            cursor.rewindToTick(tempTick);
+                            curScore.selection.select(cursor.element.notes[0]);
+                        curScore.endCmd();
+                        return true;
+                    }
+                    //if that note is neither inside melisma line nor inside a tie, dump the character to the original selection
+                    console.log("addSynalepha(): Prev note is neither inside melisma line nor inside a tie, dump " + character + " to the original selected note");
+                    curScore.startCmd();
+                        var fill = newElement(Element.LYRICS);
+                        fill.text = character;
+                        fill.voice = cursor.voice;
+                        cursor.rewindToTick(tempTick);
+                        cursor.element.add(fill);
+                        nextChar();
+                        updateDisplay();
+                    curScore.endCmd();
+                    return true;
+                }
+            }
         }
+    }
+
+    //helper function, check if a note is inside a melisma line
+    function isInsideMelismaLine(cursor)
+    {
+        var checkLength = 0;
+        do
+        {
+            cursor.prev();
+            if(cursor.element == null) return false;
+            if(cursor.element.type != 93) return false;
+            checkLength += durationTo64(cursor.element.duration);
+        } while(cursor.element.lyrics.length == 0)
+        var melismaLength = durationTo64(cursor.element.lyrics[0].lyricTicks)
+        if(melismaLength == 0) return false;
+        if(melismaLength < checkLength) return false;
+        return true;
     }
 
     function durationTo64(duration) { return 64 * duration.numerator / duration.denominator;} //helper function for converting duration to 64 for addMelisma()
@@ -524,7 +680,7 @@ MuseScore
             }
             Button 
             {
-                id: polySyllabicButton
+                id: synalephaButton
                 text: "多音"
                 onClicked:
                 {
