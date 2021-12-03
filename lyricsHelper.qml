@@ -614,7 +614,7 @@ MuseScore
     function prevChar() //stepping the @lrcCursor back by a char, same structure as the nextChar() above
     {
         var prev = lrcCursor - 1;
-        if(prev <= 0) //loops back to the begining if the @lrcCursor reaches begining.
+        if(prev < 0) //loops back to the begining if the @lrcCursor reaches begining.
         { 
             lrcCursor = lrc.length - 1; return false;
         }
@@ -646,7 +646,7 @@ MuseScore
             {
                 id: lyricSource
                 height: parent.height
-                width: inputButtons.width - lrcStepForwardButton.width
+                width: inputButtons.width - (syllableButton.width/4)
                 wrapMode: Text.WrapAnywhere
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignRight
@@ -655,7 +655,7 @@ MuseScore
             Button 
             {
                 id : buttonOpenFile
-                width: syllableButton.width/5
+                width: syllableButton.width/4
                 text: "..."
                 onClicked: {
                      fileDialog.open();
@@ -672,8 +672,8 @@ MuseScore
             Button
             {
                 id: lrcStepBackButton
-                text: "<font size=\"6\">◀</font>"
-                width: syllableButton.width/6
+                text: "<font size=\"5\">◀</font>"
+                width: syllableButton.width/4
                 onClicked:
                 {
                     prevChar();
@@ -710,8 +710,8 @@ MuseScore
             Button
             {
                 id: lrcStepForwardButton
-                text: "<font size=\"6\">▶</font>"
-                width: syllableButton.width/6
+                text: "<font size=\"5\">▶</font>"
+                width: syllableButton.width/4
                 onClicked:
                 {
                     nextChar();
