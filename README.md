@@ -23,9 +23,9 @@ to the middle of the tie. Also the melisma will not cross a rest because it is a
 After extending the melisma line, the plugin will find the next available note and select it.
 4. "Synalepha" button immediately concatenates the highlighted character to the lyrics if the selected note HAS lyrics.
 If selected note has no lyrics, the plugin will find the previous available note to concatenate the character.
-This design is for the sake of continuity of the workflow. The logic of finding the previous note is the reversed way of
+This design is for the sake of the continuity of workflow. The logic of finding the previous note is the reversed way of
 "Syllable" button finds the next available note. So the user can easily add synalepha in the middle of the lyrics editing, and not
-interrupted by the neccessity of selecting notes.
+interrupted by the neccessity of using mouse to click the notes.
 
 CN:
 此歌词插件适配MuseScore 3.5及以上的版本，这个插件是在MuseScore 3.6.2环境下开发的，我推荐您在使用本插件之前更新您的MuseScore至最新版本。
