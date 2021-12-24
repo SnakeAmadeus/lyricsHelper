@@ -10,7 +10,7 @@ Installation:
 3. Tick the checkbox of "Lyrics Helper," define a preferred shortcut if you like.
 4. Click to Musescore menu toolbar -> plugins -> Lyrics Helper, and enjoy!
 
-You need to select a txt file by clicking "..." first to enable all the buttons.
+You need to select a txt file by clicking "..." first to enable all the buttons. Or just drag-drop a text over the plugin! 
 Button Behaviors:
 1. "◀" and "▶" button moves the lyrics cursor backward/foward by 1 step. The cursor will loop if it reaches the filehead/filetail.
 All following buttons will only work when A SINGLE NOTE is selected:
@@ -38,7 +38,7 @@ CN:
 3. 在插件管理器内将Lyrics Helper勾选，点击确定。
 4. 本插件就应该会出现在菜单栏“插件”下，点击就可以使用了！
 
-您必须先点击“...”来加载一个歌词。
+您必须先点击“...”来加载一个歌词，或者直接把歌词文件拖拽到插件上也可以。
 按钮行为：
 1. "◀" 和 "▶" 键可以移动当前在下方歌词里选择的字，加粗的字即是下一个将被输入的歌词。
 以下所有的按钮都需要在乐谱上选中*单个音符*的前提下才能运作：
