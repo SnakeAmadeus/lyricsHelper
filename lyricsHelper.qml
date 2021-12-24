@@ -38,7 +38,26 @@ MuseScore
         id: myFileLyrics
         onError: console.log(msg + "  Filename = " + myFileLyrics.source);
     }
-        
+    
+    function acceptFile(filename) //helper function that reads a file for widget fileDialog and fileDrop
+    {
+        if(filename)
+        {
+            //console.log("You chose: " + filename)
+            myFileLyrics.source = filename;
+            //behaviors after reading the text file
+            lyricSource.text = "当前文件：" + myFileLyrics.source.slice(8); //trim path name for better view
+            lyricSource.horizontalAlignment = Text.AlignLeft;
+            lrc = myFileLyrics.read(); //file selection pop-up
+            lrcDisplay.text = lrc; //update lyrics text to displayer
+            lrcCursor = 0; //reset @lrcCursor
+            inputButtons.enabled = true; //recover input buttons' availability
+            updateDisplay();
+            //resize the pannel
+            controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
+        }
+    }
+
     FileDialog 
     {
         id: fileDialog
@@ -47,21 +66,7 @@ MuseScore
         onAccepted: 
         {
             var filename = fileDialog.fileUrl;
-            //console.log("You chose: " + filename)
-            if(filename)
-            {
-                myFileLyrics.source = filename;
-                //behaviors after reading the text file
-                lyricSource.text = "当前文件：" + myFileLyrics.source.slice(8); //trim path name for better view
-                lyricSource.horizontalAlignment = Text.AlignLeft;
-                lrc = myFileLyrics.read(); //file selection pop-up
-                lrcDisplay.text = lrc; //update lyrics text to displayer
-                lrcCursor = 0; //reset @lrcCursor
-                inputButtons.enabled = true; //recover input buttons' availability
-                updateDisplay();
-                //resize the pannel
-                controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
-            }
+            acceptFile(filename)
         }
     }
     
@@ -194,6 +199,7 @@ MuseScore
                 {
                     console.log("addSyllable(): EOF detected, you can't add more lyrics");
                     curScore.selection.clear();
+                    curScore.endCmd();
                     return false;
                 }
                 else //if no lyrics on the current note, add it but no future cursor is forwarded.
@@ -296,6 +302,7 @@ MuseScore
                     {
                         console.log("addSyllable(): EOF detected, you can't add more lyrics");
                         curScore.selection.clear();
+                        curScore.endCmd();
                         return false;
                     }
                     if(cursor.element.type != 93) //corner case: the element after the tail of the tied note is a rest
@@ -334,7 +341,7 @@ MuseScore
         if(cursor)
         {
             console.log("-----------addMelisma() start----------");
-            //Big Discovery: MuseScore's Lyrics' Melisma was manipulated by the lyrics.lyricTicks property, which is a property of Ms::PluginAPI::Element
+            //MuseScore's Lyrics' Melisma was manipulated by the lyrics.lyricTicks property, which is a property of Ms::PluginAPI::Element
             //Because the lyrics Object was wrapped in Ms::PluginAPI::Element, so the cursor.element.lyrics[0]'s type is actually Ms::PluginAPI::Element, instead of a lyrics object
             //There is no direct access to the object of Lyrics' members as shown in the libmscore/lyrics.h
             //The definition of this lyrics.lyricTicks is the sum of note values from *begining* of the first note to the *begining* of the last note.
@@ -633,15 +640,42 @@ MuseScore
         }
     }
 
+    MouseArea 
+    { //workarounds for DropArea validates file extensions because the DropArea.keys were not functioning properly
+      //Special Thansk to https://stackoverflow.com/a/28800328
+        anchors.fill: controls
+        hoverEnabled: true
+        enabled: !fileDrop.enabled
+        onContainsMouseChanged: fileDrop.enabled = true
+    }
+
+    DropArea
+    {
+        id: fileDrop
+        anchors.fill: controls
+        onEntered:{
+            if(drag.urls.length == 1) 
+                if(drag.urls[0].split('.').pop() == "txt")
+                    return;
+            drag.accept();
+            fileDrop.enabled = false
+        }
+        onDropped:{
+            var filename = Qt.resolvedUrl(drop.urls[0]);
+            acceptFile(filename);
+        }
+    }
+    
     Column 
     {
-        id: controls
+        id: controls 
         Grid
         {
             id: lyricSourceControl
             columns: 2
             rows: 1
             spacing: 2
+            
             Text 
             {
                 id: lyricSource
@@ -657,7 +691,8 @@ MuseScore
                 id : buttonOpenFile
                 width: syllableButton.width/4
                 text: "..."
-                onClicked: {
+                onClicked: 
+                {
                      fileDialog.open();
                 }
             }
