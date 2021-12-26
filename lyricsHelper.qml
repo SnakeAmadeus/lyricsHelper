@@ -327,6 +327,7 @@ MuseScore
                     }
                 }
                 curScore.selection.select(cursor.element.notes[0]);//move selection to the next note
+                playCursor(cursor);
             curScore.endCmd();
             //move the lyrics cursor to the next character
             nextChar();
@@ -440,6 +441,7 @@ MuseScore
                     }
                 }
                 curScore.selection.select(cursor.element.notes[0]);//move selection to the next note
+                playCursor(cursor);
             curScore.endCmd();
             console.log("------------addMelisma() end-------------");
             return true;
@@ -596,6 +598,29 @@ MuseScore
         }
     }
 
+    function playCursor(cursor) //plays the note's sound at cursor, Special Thanks to Sammik's idea of using cmd("prev-chord") & cmd("next-chord") as workarounds : https://musescore.org/en/node/327715
+    {
+        cursor.prev();
+        if(cursor.element == null) //if cursor is at the first note of the score
+        {
+            cmd("prev-chord");
+            cursor.next(); //restores cursor's position
+            return;
+        } 
+        if(cursor.element.type != 93) // if previous element is a rest
+        {
+            cmd("prev-chord");
+            cmd("next-chord");
+            cursor.next();
+            return;
+        }
+        //if previous element is a note, in order to prevent playing the sound of previous note, use cursor to select that note.
+        curScore.selection.select(cursor.element.notes[0]);
+        cmd("next-chord");
+        cursor.next();
+        return;
+    }
+
     function nextChar() //advancing the @lrcCursor forward by a char
     {
         var next = lrcCursor + 1;
@@ -642,7 +667,7 @@ MuseScore
 
     MouseArea 
     { //workarounds for DropArea validates file extensions because the DropArea.keys were not functioning properly
-      //Special Thansk to https://stackoverflow.com/a/28800328
+      //Special Thanks to https://stackoverflow.com/a/28800328
         anchors.fill: controls
         hoverEnabled: true
         enabled: !fileDrop.enabled
