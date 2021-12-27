@@ -682,10 +682,9 @@ MuseScore
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
         var targetRow = Math.ceil(posY / verticalIncrement); //target row
-        console.log("target row: " + targetRow)
+        console.log("target row: " + targetRow);
         var txt = lrc; //buffer the lyrics
         var findRow = 1; //cursor row, start with 1
-        var findColumn = 0; //cursor column
         lrcDisplayDummy.text = ""; 
         for(var i = 0; i < txt.length; i++)
         {
@@ -694,17 +693,16 @@ MuseScore
             {
                 findRow++; 
                 lrcDisplayDummy.text = ""; 
-                findColumn = 0;
                 //console.log("go to new line")
                 console.log(findRow)
             }
             if(findRow == targetRow)
             {
                 //forcefully calculate the horizontal size of lyrics
-                lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i)));
-                findColumn = lrcDisplayDummy.width;
-                //console.log("buffered text: " + lrcDisplayDummy.text)
-                if(posX < findColumn.width) 
+                //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap here idk why :
+                lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/\s+$/gm, ' '); 
+                console.log("buffered text: " + lrcDisplayDummy.text)
+                if(posX < lrcDisplayDummy.width) 
                 {
                     if(txt.charAt(i) == ' ') return -1;
                     return i;
