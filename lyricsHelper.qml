@@ -1,15 +1,16 @@
 //==============================================
 //  Lyrics Helper
-//  Copyright (🄯) 2021 Snake4Y5H
+//  Copyright (©) 2021 Snake4Y5H
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License version 2
 //  as published by the Free Software Foundation and appearing in
 //  the file LICENCE.GPL
 //==============================================
-import QtQuick 2.2
+import QtQuick 2.9
 import QtQuick.Dialogs 1.2
 import QtQuick.Controls 2.00
+import QtQuick.Controls 2.2
 import MuseScore 3.0
 import FileIO 3.0
 import "zparkingb/selectionhelper.js" as SelHelper
@@ -24,12 +25,14 @@ MuseScore
 
     implicitHeight: controls.implicitHeight * 1.5
     implicitWidth: controls.implicitWidth
-    
-    property var lrc: String("");
-    property var lrcCursor: 0;
 
     //@replaceMode indicates whether replacing the existed lyrics when encountering a lyrics conflict. 0 = OFF, 1 = ON.
     property var replaceMode : 1;
+    //@previewSoundMode decides whether preview note's sound when cursor advances
+    property var previewSoundMode: 1;
+
+    property var lrc: String("");
+    property var lrcCursor: 0;
 
     onRun: {}
 
@@ -46,7 +49,7 @@ MuseScore
             //console.log("You chose: " + filename)
             myFileLyrics.source = filename;
             //behaviors after reading the text file
-            lyricSource.text = "当前文件：" + myFileLyrics.source.slice(8); //trim path name for better view
+            lyricSource.text = "当前歌词：" + myFileLyrics.source.slice(8); //trim path name for better view
             lyricSource.horizontalAlignment = Text.AlignLeft;
             lrc = myFileLyrics.read(); //file selection pop-up
             lrcDisplay.text = lrc; //update lyrics text to displayer
@@ -55,6 +58,8 @@ MuseScore
             updateDisplay();
             //resize the pannel
             controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
+            getVerticalIncrement();
+            lrcDisplayScrollView.height = inputButtons.height * 8
         }
     }
 
@@ -327,7 +332,7 @@ MuseScore
                     }
                 }
                 curScore.selection.select(cursor.element.notes[0]);//move selection to the next note
-                playCursor(cursor);
+                if (previewSoundMode == 1) playCursor(cursor);
             curScore.endCmd();
             //move the lyrics cursor to the next character
             nextChar();
@@ -441,7 +446,7 @@ MuseScore
                     }
                 }
                 curScore.selection.select(cursor.element.notes[0]);//move selection to the next note
-                playCursor(cursor);
+                if (previewSoundMode == 1) playCursor(cursor);
             curScore.endCmd();
             console.log("------------addMelisma() end-------------");
             return true;
@@ -665,6 +670,51 @@ MuseScore
         }
     }
 
+    property var verticalIncrement: 0;
+    function getVerticalIncrement()
+    {
+        lrcDisplayDummy.text = convertLineBreak("1");
+        verticalIncrement = lrcDisplayDummy.height;
+        lrcDisplayDummy.text = convertLineBreak("1\n1");
+        verticalIncrement = lrcDisplayDummy.height - verticalIncrement;
+        console.log("vertical line increment: " + verticalIncrement);
+    }
+    function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
+    {
+        var targetRow = Math.ceil(posY / verticalIncrement); //target row
+        console.log("target row: " + targetRow)
+        var txt = lrc; //buffer the lyrics
+        var findRow = 1; //cursor row, start with 1
+        var findColumn = 0; //cursor column
+        lrcDisplayDummy.text = ""; 
+        for(var i = 0; i < txt.length; i++)
+        {
+            console.log("current checking character: " + txt.charAt(i) + ", at index " + i)
+            if(txt.charAt(i) == '\n') 
+            {
+                findRow++; 
+                lrcDisplayDummy.text = ""; 
+                findColumn = 0;
+                //console.log("go to new line")
+                console.log(findRow)
+            }
+            if(findRow == targetRow)
+            {
+                //forcefully calculate the horizontal size of lyrics
+                lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i)));
+                findColumn = lrcDisplayDummy.width;
+                //console.log("buffered text: " + lrcDisplayDummy.text)
+                if(posX < findColumn.width) 
+                {
+                    if(txt.charAt(i) == ' ') return -1;
+                    return i;
+                }
+            }
+            if(findRow > targetRow) return -1;
+        }
+        return -1;
+    }
+
     MouseArea 
     { //workarounds for DropArea validates file extensions because the DropArea.keys were not functioning properly
       //Special Thanks to https://stackoverflow.com/a/28800328
@@ -779,13 +829,49 @@ MuseScore
                 }
             }
         }
+        ScrollView
+        {
+            id: lrcDisplayScrollView
+            width: inputButtons.width
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical.interactive: true
+            clip: true
+            Text
+            {
+                id: lrcDisplay
+                text: "请先选择一个歌词文件"
+                MouseArea
+                {
+                    id: lrcDisplayMouseArea
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    enabled: inputButtons.enabled
+                    onClicked:
+                    {
+                        console.log(mouse.x, mouse.y);
+                        var found = findChar(mouse.x, mouse.y);
+                        if(found != -1) 
+                        {
+                            console.log("------Result: " + found + ", which is: " + lrc.charAt(found) + "-----");
+                            lrcCursor = found;
+                        }
+                        else console.log("given position has no char!");
+                        updateDisplay();
+                    }
+                }
+            }
+        }
+        
         Text
         {
-            id: lrcDisplay
+            id: lrcDisplayDummy
+            visible: false
             text: "请先选择一个歌词文件"
         }
     }
 
+    
+    
     //for debugging purpose. copy-pasted from https://github.com/mirabilos/mscore-plugins/blob/master/notenames-as-lyrics.qml
     function nameElementType(elementType) {
         switch (elementType) {
