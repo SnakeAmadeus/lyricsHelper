@@ -794,11 +794,11 @@ MuseScore
         var tempStack = []; var maxUndoActions = maximumUndoSteps * 4;
         if(undo_stack.length > maxUndoActions)
         {
-            console.log("pre undo_stack: " + undo_stack);
+            //console.log("pre undo_stack: " + undo_stack);
             for(var i = 0; i < maxUndoActions; i++) tempStack.push(undo_stack.pop());
             undo_stack = [];
             for(var i = 0; i < maxUndoActions; i++) undo_stack.push(tempStack.pop());
-            console.log("post undo_stack: " + undo_stack);
+            //console.log("post undo_stack: " + undo_stack);
         }
     }
     onScoreStateChanged: 
@@ -873,7 +873,6 @@ MuseScore
             columns: 2
             rows: 1
             spacing: 2
-            
             Text 
             {
                 id: lyricSource
@@ -889,9 +888,103 @@ MuseScore
                 id : buttonOpenFile
                 width: syllableButton.width/4
                 text: "..."
-                onClicked: 
+                hoverEnabled: true
+                ToolTip.delay: 250
+                ToolTip.timeout: 5000
+                ToolTip.visible: hovered
+                ToolTip.text: "提示：鼠标右键点击\"...\"可以打开插件设置⚙"
+                Rectangle {  // background, also allowing the click
+                    id: settingsOverlayColor
+                    anchors.fill: settingsOverlay
+                    border.color: "grey"
+                    color: "grey"
+                    opacity: 0
+                }
+                MouseArea
                 {
-                     fileDialog.open();
+                    id:settingsOverlay
+                    anchors.fill: parent
+                    acceptedButtons: Qt.RightButton | Qt.LeftButton
+                    onPressed: 
+                    {   
+                        if(mouse.button == Qt.RightButton) buttonOpenFile.text = "⚙"; 
+                        if(mouse.button == Qt.LeftButton) buttonOpenFile.text = "..."; 
+                        settingsOverlayColor.opacity = 0.2;
+                    }
+                    onReleased:{
+                        buttonOpenFile.clicked();
+                        settingsOverlayColor.opacity = 0;
+                    }
+                    Popup 
+                    {
+                        id: settingsPopup
+                        closePolicy: Popup.NoAutoClose
+                        x:-175
+                        y:-200
+                        width: 175
+                        height: 250
+                        modal: true
+                        focus: true
+                        Grid
+                        {
+                            id: settingsGrid
+                            columns: 1
+                            rows: 6
+                            spacing: 5
+                            Text 
+                            { 
+                                id: settingsTitle
+                                text: "<b style=\"font-size:8vw\">⚙ 插件设置 Settings：</b>" 
+                            }
+                            CheckBox { 
+                                id: replaceModeCheckBox
+                                checked: replaceMode 
+                                text: qsTr("替换模式:\n如已有歌词则覆盖")}
+                            CheckBox { 
+                                id: previewSoundModeCheckBox
+                                checked: previewSoundMode 
+                                text: qsTr("🔊预览音符声音")}
+                            Text 
+                            { 
+                                id: maximumUndoStepsSpinBoxTitle
+                                text: "最大撤销步数：" 
+                            }
+                            SpinBox{
+                                id: maximumUndoStepsSpinBox
+                                from: 10
+                                value: maximumUndoSteps
+                                to: 100
+                                stepSize: 5
+                                validator: IntValidator {
+                                    locale: maximumUndoStepsSpinBox.locale.name
+                                    bottom: Math.min(maximumUndoStepsSpinBox.from, maximumUndoStepsSpinBox.to)
+                                    top: Math.max(maximumUndoStepsSpinBox.from, maximumUndoStepsSpinBox.to)
+                                }
+                            }
+                            Button { 
+                                text: "OK"
+                                width: syllableButton*0.5
+                                height: syllableButton*0.5
+                                onClicked: { 
+                                    replaceMode = replaceModeCheckBox.checked;
+                                    previewSoundMode = previewSoundModeCheckBox.checked;
+                                    maximumUndoSteps = maximumUndoStepsSpinBox.value;
+                                    settingsPopup.close(); 
+                                    console.log("replaceMode: " + replaceMode);
+                                    console.log("previewSoundMode: " + previewSoundMode);
+                                    console.log("maximumUndoSteps: " + maximumUndoSteps);
+                                    buttonOpenFile.text = "...";
+                                    buttonOpenFile.ToolTip.delay = 2000;
+                                }
+                            }
+                        }
+                        contentItem: settingsGrid
+                    }
+                }
+                onClicked : 
+                {
+                    if(buttonOpenFile.text == "...") fileDialog.open();
+                    if(buttonOpenFile.text == "⚙") settingsPopup.open();
                 }
             }
         }
