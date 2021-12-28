@@ -31,6 +31,8 @@ MuseScore
     property var replaceMode : 1;
     //@previewSoundMode decides whether preview note's sound when cursor advances
     property var previewSoundMode: 1;
+    //@maximumUndoStep decides the max amount of actions that is done by lyricsHelper can be undone.
+    property var maximumUndoSteps: 25;
 
     property var lrc: String("");
     property var lrcCursor: 0;
@@ -61,6 +63,7 @@ MuseScore
             controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
             lrcDisplayScrollView.height = inputButtons.height * 8
             getVerticalIncrement();
+            undo_stack = [];
         }
     }
 
@@ -229,7 +232,8 @@ MuseScore
             var nextCursor = cursor; nextCursor.next();
             if(nextCursor.element == null) //if reaches the score EOF
             {
-                if(getSelectedCursor().element.lyrics.length == 1) //if there already been lyrcis on the next element, do nothing and deselect
+                cursor = getSelectedCursor();
+                if(cursor.element.lyrics.length == 1) //if there already been lyrcis on the next element, do nothing and deselect
                 {
                     console.log("addSyllable(): EOF detected, you can't add more lyrics");
                     curScore.selection.clear();
@@ -241,14 +245,11 @@ MuseScore
                     var character = lrc.charAt(lrcCursor);
                     var fill = newElement(Element.LYRICS);
                     fill.text = character;
-                    fill.voice = getSelectedCursor().voice;
+                    fill.voice = cursor.voice;
                     curScore.startCmd();
                         console.log("addSyllable(): current character = " + fill.text);
-                        getSelectedCursor().element.add(fill);
-                        undo_stack.push(getSelectedCursor().tick);
-                        undo_stack.push(getSelectedCursor().element.lyrics[0].text);
-                        undo_stack.push(lrcCursor);
-                        undo_stack.push("addSyllable()");
+                        cursor.element.add(fill);
+                        pushToUndoStack(cursor, "addSyllable()");
                     curScore.endCmd();
                     nextChar();
                     updateDisplay();
@@ -305,10 +306,7 @@ MuseScore
                     cursor = getSelectedCursor();
                 }
                 cursor.element.add(fill);
-                undo_stack.push(cursor.tick);
-                undo_stack.push(cursor.element.lyrics[0].text);
-                undo_stack.push(lrcCursor);
-                undo_stack.push("addSyllable()");
+                pushToUndoStack(cursor, "addSyllable()")
                 cursor.next();
                 console.log("addSyllable(): Next Selection is " + nextCursor.element.type);
                 //if the next element is not a note
@@ -505,12 +503,7 @@ MuseScore
                     cursor.element.lyrics[0].text = concatenated;
                     nextChar();
                     updateDisplay();
-                    var tempTick = cursor.tick;
-                    undo_stack.push(getSelectedCursor().tick);
-                    cursor.rewindToTick(tempTick);
-                    undo_stack.push(cursor.element.lyrics[0].text);
-                    undo_stack.push(lrcCursor);
-                    undo_stack.push("addSynalepha()");
+                    pushToUndoStack(cursor, "addSynalepha()");
                 curScore.endCmd();
                 return true;
             }
@@ -530,12 +523,7 @@ MuseScore
                             fill.voice = cursor.voice;
                             cursor.rewindToTick(tempTick);
                             cursor.element.add(fill);
-                            var tempTick = cursor.tick;
-                            undo_stack.push(getSelectedCursor().tick);
-                            cursor.rewindToTick(tempTick);
-                            undo_stack.push(cursor.element.lyrics[0].text);
-                            undo_stack.push(lrcCursor);
-                            undo_stack.push("addSynalepha()");
+                            pushToUndoStack(cursor, "addSynalepha()");
                             nextChar();
                             updateDisplay();
                         curScore.endCmd();
@@ -549,12 +537,7 @@ MuseScore
                         console.log("addSynalepha(): character to be added: " + character);
                         var concatenated = cursor.element.lyrics[0].text + character;
                         cursor.element.lyrics[0].text = concatenated;
-                        var tempTick = cursor.tick;
-                        undo_stack.push(getSelectedCursor().tick);
-                        cursor.rewindToTick(tempTick);
-                        undo_stack.push(cursor.element.lyrics[0].text);
-                        undo_stack.push(lrcCursor);
-                        undo_stack.push("addSynalepha()");
+                        pushToUndoStack(cursor, "addSynalepha()");
                         nextChar();
                         updateDisplay();
                     curScore.endCmd();
@@ -571,12 +554,7 @@ MuseScore
                             console.log("addSynalepha(): Note inside a melisma line detected, character to be added at the begining of melisma line: " + character);
                             var concatenated = cursor.element.lyrics[0].text + character;
                             cursor.element.lyrics[0].text = concatenated;
-                            var tempTick = cursor.tick;
-                            undo_stack.push(getSelectedCursor().tick);
-                            cursor.rewindToTick(tempTick);
-                            undo_stack.push(cursor.element.lyrics[0].text);
-                            undo_stack.push(lrcCursor);
-                            undo_stack.push("addSynalepha()");
+                            pushToUndoStack(cursor, "addSynalepha()");
                             nextChar();
                             updateDisplay();
                         curScore.endCmd();
@@ -607,12 +585,7 @@ MuseScore
                             updateDisplay();
                             cursor.rewindToTick(tempTick);
                             curScore.selection.select(cursor.element.notes[0]);
-                            var tempTick = cursor.tick;
-                            undo_stack.push(getSelectedCursor().tick);
-                            cursor.rewindToTick(tempTick);
-                            undo_stack.push(cursor.element.lyrics[0].text);
-                            undo_stack.push(lrcCursor);
-                            undo_stack.push("addSynalepha()");
+                            pushToUndoStack(cursor, "addSynalepha()");
                         curScore.endCmd();
                         return true;
                     }
@@ -626,12 +599,7 @@ MuseScore
                         cursor.element.add(fill);
                         nextChar();
                         updateDisplay();
-                        var tempTick = cursor.tick;
-                        undo_stack.push(getSelectedCursor().tick);
-                        cursor.rewindToTick(tempTick);
-                        undo_stack.push(cursor.element.lyrics[0].text);
-                        undo_stack.push(lrcCursor);
-                        undo_stack.push("addSynalepha()");
+                        pushToUndoStack(cursor, "addSynalepha()");
                     curScore.endCmd();
                     return true;
                 }
@@ -806,6 +774,33 @@ MuseScore
     //When user undos an action, The plugin will using the top snapshot in the undo stack to identify whether this action is done by lyricsHelper. 
     //The official documentation stated MS's undo/redo function is still experimental. Thus, in the future this functionality might be completely changed.
     property var undo_stack : [];
+    function pushToUndoStack(cursor, type) //helper function that pushes the plugin action at cursor into undo_stack
+    {
+        if(cursor) 
+        {
+            var tempTick = cursor.tick;
+            undo_stack.push(getSelectedCursor().tick);
+            cursor.rewindToTick(tempTick);
+            undo_stack.push(cursor.element.lyrics[0].text);
+            undo_stack.push(lrcCursor);
+        }
+        else 
+        {
+            console.log("Lyrics clicking event recorded, Push: \"" + type + "\" to the undo stack.");
+            undo_stack.push(0); undo_stack.push("←NULL→"); undo_stack.push(0);
+        }
+        undo_stack.push(type);
+        //Clean undo_stack when reach maximumUndoSteps
+        var tempStack = []; var maxUndoActions = maximumUndoSteps * 4;
+        if(undo_stack.length > maxUndoActions)
+        {
+            console.log("pre undo_stack: " + undo_stack);
+            for(var i = 0; i < maxUndoActions; i++) tempStack.push(undo_stack.pop());
+            undo_stack = [];
+            for(var i = 0; i < maxUndoActions; i++) undo_stack.push(tempStack.pop());
+            console.log("post undo_stack: " + undo_stack);
+        }
+    }
     onScoreStateChanged: 
     {   
         if(state.undoRedo)
@@ -814,7 +809,20 @@ MuseScore
             if(undo_stack.length > 1)
             {
                 console.log("Pre undo_stack = " + undo_stack);
-                var snapshot_type = undo_stack.pop();
+                var top = undo_stack.pop();
+                while (top.split(':').length == 2) //check for lyrics clicking events
+                {
+                    var parse = top.split(':')
+                    if(parse[0] == '彁')
+                    {
+                        lrcCursor = parse[1].split('->')[0];
+                        console.log("Lyrics Selection history detected, roll lrcCursor back to " + lrcCursor);
+                        updateDisplay(); 
+                        for (var i = 0; i < 3; i++) undo_stack.pop();
+                        top = undo_stack.pop();
+                    }
+                }
+                var snapshot_type = top;
                 var snapshot_lrcCursor = undo_stack.pop();
                 var snapshot_lyrics = undo_stack.pop();
                 var snapshot_note_ticks = undo_stack.pop();
@@ -849,6 +857,7 @@ MuseScore
                 undo_stack.push(snapshot_lrcCursor);
                 undo_stack.push(snapshot_type);
                 console.log("But the action that has been undone is not from this plugin");
+                updateDisplay(); 
                 return false;
             }
             console.log("But undo stack is empty.");
@@ -963,13 +972,16 @@ MuseScore
                     onClicked:
                     {
                         console.log("Mouse clicked at X:" + mouse.x + " Y:" + mouse.y);
+                        var original = lrcCursor;
                         var found = findChar(mouse.x, mouse.y);
                         if(found != -1) 
                         {
                             console.log("------Selected: " + lrc.charAt(found) + ", lrcCursor is at: " + found + "-----");
                             lrcCursor = found;
-                            undo_stack = [];
-                            console.log("Also undo_stack has been cleared.");
+                            // Also push the lrcCursor change event to the undo_stack, so we can trace lrcCursor's position back
+                            // placeholder "彁" is a very edgy Kanji (幽霊文字, Yuureimoji) that has totally unknown etymology 
+                            // the choice is a tribute to LeaF's song 《彁》 https://www.youtube.com/watch?v=EsOU0V2kpUI
+                            pushToUndoStack(false, "彁:" + original.toString() + "->" + lrcCursor.toString())
                         }
                         else console.log("given position has no char!");
                         updateDisplay();
@@ -986,8 +998,6 @@ MuseScore
         }
     }
 
-    
-    
     //for debugging purpose. copy-pasted from https://github.com/mirabilos/mscore-plugins/blob/master/notenames-as-lyrics.qml
     function nameElementType(elementType) {
         switch (elementType) {
