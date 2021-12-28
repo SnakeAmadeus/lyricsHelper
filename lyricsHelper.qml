@@ -9,7 +9,7 @@
 //==============================================
 import QtQuick 2.9
 import QtQuick.Dialogs 1.2
-import QtQuick.Controls 2.00
+import QtQuick.Controls 2.0
 import QtQuick.Controls 2.2
 import MuseScore 3.0
 import FileIO 3.0
@@ -22,6 +22,7 @@ MuseScore
     version:     "3.0"
     description: qsTr("A plugin intends to help input lyrics. It is designed for East Asian languages (monosyllabic languages like Sino-Tibetian languages) but also work for other language texts with workarounds.")
     pluginType: "dock"
+    dockArea: "Right"
 
     implicitHeight: controls.implicitHeight * 1.5
     implicitWidth: controls.implicitWidth
@@ -58,8 +59,8 @@ MuseScore
             updateDisplay();
             //resize the pannel
             controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
-            getVerticalIncrement();
             lrcDisplayScrollView.height = inputButtons.height * 8
+            getVerticalIncrement();
         }
     }
 
@@ -74,6 +75,35 @@ MuseScore
             acceptFile(filename)
         }
     }
+
+    //workarounds for DropArea validates file extensions because the DropArea.keys were not functioning properly
+    //Special Thanks to https://stackoverflow.com/a/28800328
+    MouseArea 
+    { 
+        anchors.fill: controls
+        hoverEnabled: true
+        enabled: !fileDrop.enabled
+        onContainsMouseChanged: fileDrop.enabled = true
+    }
+
+    DropArea
+    {
+        id: fileDrop
+        anchors.fill: controls
+        onEntered:
+        {
+            if(drag.urls.length == 1) 
+                if(drag.urls[0].split('.').pop() == "txt")
+                    return;
+            drag.accept();
+            fileDrop.enabled = false
+        }
+        onDropped:
+        {
+            var filename = Qt.resolvedUrl(drop.urls[0]);
+            acceptFile(filename);
+        }
+    }
     
     function getSelectedTicks() //get ticks of current selected segements, modified from https://musescore.org/en/node/293025
     {
@@ -85,7 +115,7 @@ MuseScore
         if (curScore.selection && curScore.selection.elements &&
             curScore.selection.elements.length) {
             var elts = curScore.selection.elements;
-            console.log("operating on selection: " + elts.length);
+            //console.log("operating on selection: " + elts.length);
             for (var idx = 0; idx < elts.length; ++idx) {
                 var e = elts[idx];
                 while (e) {
@@ -104,13 +134,12 @@ MuseScore
                     break;
                 }
                 if (!e || e.type != Element.SEGMENT) {
-                    console.log("#" + idx + " skipped, " +
-                        "no segment as parent");
+                    //console.log("#" + idx + " skipped, " + "no segment as parent");
                     continue;
                 }
-                console.log("#" + idx + " at " + e.tick);
+                //console.log("#" + idx + " at " + e.tick);
                 if (e.tick < seen) {
-                    console.log("below " + seen + ", ignoring");
+                    //console.log("below " + seen + ", ignoring");
                     continue;
                 }
                 seen = e.tick ? 1 : 0;
@@ -124,7 +153,7 @@ MuseScore
         var cursor = curScore.newCursor();
         cursor.rewind(Cursor.SELECTION_START);
         if (cursor.segment) {
-            console.log("operating on cursor at " + cursor.tick);
+            //console.log("operating on cursor at " + cursor.tick);
             seen = cursor.tick ? 1 : 0;
             if (cursor.tick < minpos)
                 minpos = cursor.tick;
@@ -175,7 +204,7 @@ MuseScore
             console.log("getSelectedCursor(): You ain't select nothing");
             return false;
        }
-       console.log(selection.length);
+       //console.log(selection.length);
        if (selection.length != 1)
        {
             console.log("getSelectedCursor(): Current Selection Must Be a Single Note!");
@@ -186,7 +215,7 @@ MuseScore
        cursor.track = selection[0].track;
        cursor.inputStateMode = 1;
        cursor.rewindToTick(getSelectedTicks()); //move cursor's to the ticks of selection.
-       console.log(cursor.tick);
+       //console.log(cursor.tick);
        return cursor;
     }
 
@@ -216,6 +245,10 @@ MuseScore
                     curScore.startCmd();
                         console.log("addSyllable(): current character = " + fill.text);
                         getSelectedCursor().element.add(fill);
+                        undo_stack.push(getSelectedCursor().tick);
+                        undo_stack.push(getSelectedCursor().element.lyrics[0].text);
+                        undo_stack.push(lrcCursor);
+                        undo_stack.push("addSyllable()");
                     curScore.endCmd();
                     nextChar();
                     updateDisplay();
@@ -272,6 +305,10 @@ MuseScore
                     cursor = getSelectedCursor();
                 }
                 cursor.element.add(fill);
+                undo_stack.push(cursor.tick);
+                undo_stack.push(cursor.element.lyrics[0].text);
+                undo_stack.push(lrcCursor);
+                undo_stack.push("addSyllable()");
                 cursor.next();
                 console.log("addSyllable(): Next Selection is " + nextCursor.element.type);
                 //if the next element is not a note
@@ -468,6 +505,12 @@ MuseScore
                     cursor.element.lyrics[0].text = concatenated;
                     nextChar();
                     updateDisplay();
+                    var tempTick = cursor.tick;
+                    undo_stack.push(getSelectedCursor().tick);
+                    cursor.rewindToTick(tempTick);
+                    undo_stack.push(cursor.element.lyrics[0].text);
+                    undo_stack.push(lrcCursor);
+                    undo_stack.push("addSynalepha()");
                 curScore.endCmd();
                 return true;
             }
@@ -487,6 +530,12 @@ MuseScore
                             fill.voice = cursor.voice;
                             cursor.rewindToTick(tempTick);
                             cursor.element.add(fill);
+                            var tempTick = cursor.tick;
+                            undo_stack.push(getSelectedCursor().tick);
+                            cursor.rewindToTick(tempTick);
+                            undo_stack.push(cursor.element.lyrics[0].text);
+                            undo_stack.push(lrcCursor);
+                            undo_stack.push("addSynalepha()");
                             nextChar();
                             updateDisplay();
                         curScore.endCmd();
@@ -500,6 +549,12 @@ MuseScore
                         console.log("addSynalepha(): character to be added: " + character);
                         var concatenated = cursor.element.lyrics[0].text + character;
                         cursor.element.lyrics[0].text = concatenated;
+                        var tempTick = cursor.tick;
+                        undo_stack.push(getSelectedCursor().tick);
+                        cursor.rewindToTick(tempTick);
+                        undo_stack.push(cursor.element.lyrics[0].text);
+                        undo_stack.push(lrcCursor);
+                        undo_stack.push("addSynalepha()");
                         nextChar();
                         updateDisplay();
                     curScore.endCmd();
@@ -516,6 +571,12 @@ MuseScore
                             console.log("addSynalepha(): Note inside a melisma line detected, character to be added at the begining of melisma line: " + character);
                             var concatenated = cursor.element.lyrics[0].text + character;
                             cursor.element.lyrics[0].text = concatenated;
+                            var tempTick = cursor.tick;
+                            undo_stack.push(getSelectedCursor().tick);
+                            cursor.rewindToTick(tempTick);
+                            undo_stack.push(cursor.element.lyrics[0].text);
+                            undo_stack.push(lrcCursor);
+                            undo_stack.push("addSynalepha()");
                             nextChar();
                             updateDisplay();
                         curScore.endCmd();
@@ -546,6 +607,12 @@ MuseScore
                             updateDisplay();
                             cursor.rewindToTick(tempTick);
                             curScore.selection.select(cursor.element.notes[0]);
+                            var tempTick = cursor.tick;
+                            undo_stack.push(getSelectedCursor().tick);
+                            cursor.rewindToTick(tempTick);
+                            undo_stack.push(cursor.element.lyrics[0].text);
+                            undo_stack.push(lrcCursor);
+                            undo_stack.push("addSynalepha()");
                         curScore.endCmd();
                         return true;
                     }
@@ -559,6 +626,12 @@ MuseScore
                         cursor.element.add(fill);
                         nextChar();
                         updateDisplay();
+                        var tempTick = cursor.tick;
+                        undo_stack.push(getSelectedCursor().tick);
+                        cursor.rewindToTick(tempTick);
+                        undo_stack.push(cursor.element.lyrics[0].text);
+                        undo_stack.push(lrcCursor);
+                        undo_stack.push("addSynalepha()");
                     curScore.endCmd();
                     return true;
                 }
@@ -670,41 +743,56 @@ MuseScore
         }
     }
 
+    //verticalIncrement and whitespaceIncrement indicate how many pixels of a line & a whitespace on user's deivce screen.
+    //use getVerticalIncrement() to forcefully resize the invisible lrcDisplayDummy and use its width to calculate the pixel increments.
+    //This is a very cheesy solution but worked pretty well.
     property var verticalIncrement: 0;
+    property var whitespaceIncrement: 0;
     function getVerticalIncrement()
     {
         lrcDisplayDummy.text = convertLineBreak("1");
         verticalIncrement = lrcDisplayDummy.height;
+        whitespaceIncrement = lrcDisplayDummy.width;
+        lrcDisplayDummy.text = convertLineBreak("1 ");
+        whitespaceIncrement = lrcDisplayDummy.width - whitespaceIncrement;
         lrcDisplayDummy.text = convertLineBreak("1\n1");
         verticalIncrement = lrcDisplayDummy.height - verticalIncrement;
         console.log("vertical line increment: " + verticalIncrement);
     }
+
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
         var targetRow = Math.ceil(posY / verticalIncrement); //target row
-        console.log("target row: " + targetRow);
+        //console.log("target row: " + targetRow);
         var txt = lrc; //buffer the lyrics
         var findRow = 1; //cursor row, start with 1
         lrcDisplayDummy.text = ""; 
         for(var i = 0; i < txt.length; i++)
         {
-            console.log("current checking character: " + txt.charAt(i) + ", at index " + i)
+            //console.log("current checking character: " + txt.charAt(i) + ", at index " + i)
             if(txt.charAt(i) == '\n') 
             {
                 findRow++; 
                 lrcDisplayDummy.text = ""; 
                 //console.log("go to new line")
-                console.log(findRow)
             }
             if(findRow == targetRow)
             {
-                //forcefully calculate the horizontal size of lyrics
+                //forcefully calculate the horizontal size of lyrics by append characters to the invisible lrcDisplayDummy
+                //THIS IS SUCH A DIRTY WORKAROUND
                 //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap here idk why :
                 lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/\s+$/gm, ' '); 
-                console.log("buffered text: " + lrcDisplayDummy.text)
+                //console.log("buffered text: " + lrcDisplayDummy.text)
                 if(posX < lrcDisplayDummy.width) 
                 {
-                    if(txt.charAt(i) == ' ') return -1;
+                    if(txt.charAt(i) == ' ') //if user selects a whitespace, jump to the nearest character
+                    {
+                        if(i == 0 || i == txt.length - 1) return -1; //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
+                        if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) == '\n' ) return -1;
+                        if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) return i + 1;
+                        if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) return i - 1;
+                        return posX - (lrcDisplayDummy.width - whitespaceIncrement) < lrcDisplayDummy.width - posX ? i-1 : i+1;
+                    }    
                     return i;
                 }
             }
@@ -713,29 +801,57 @@ MuseScore
         return -1;
     }
 
-    MouseArea 
-    { //workarounds for DropArea validates file extensions because the DropArea.keys were not functioning properly
-      //Special Thanks to https://stackoverflow.com/a/28800328
-        anchors.fill: controls
-        hoverEnabled: true
-        enabled: !fileDrop.enabled
-        onContainsMouseChanged: fileDrop.enabled = true
-    }
-
-    DropArea
-    {
-        id: fileDrop
-        anchors.fill: controls
-        onEntered:{
-            if(drag.urls.length == 1) 
-                if(drag.urls[0].split('.').pop() == "txt")
-                    return;
-            drag.accept();
-            fileDrop.enabled = false
-        }
-        onDropped:{
-            var filename = Qt.resolvedUrl(drop.urls[0]);
-            acceptFile(filename);
+    //A "fake" undo system for this plugin, because apparently the lrcCursor's position won't roll back after users hit Ctrl+Z
+    //Every addSyllable() and addSynalepha() action will push a snapshots about what they had done (note ticks and lyrics added) into this undo stack.
+    //When user undos an action, The plugin will using the top snapshot in the undo stack to identify whether this action is done by lyricsHelper. 
+    //The official documentation stated MS's undo/redo function is still experimental. Thus, in the future this functionality might be completely changed.
+    property var undo_stack : [];
+    onScoreStateChanged: 
+    {   
+        if(state.undoRedo)
+        {
+            console.log("-----Undo/redo action detected.-----");
+            if(undo_stack.length > 1)
+            {
+                console.log("Pre undo_stack = " + undo_stack);
+                var snapshot_type = undo_stack.pop();
+                var snapshot_lrcCursor = undo_stack.pop();
+                var snapshot_lyrics = undo_stack.pop();
+                var snapshot_note_ticks = undo_stack.pop();
+                var cursor = getSelectedCursor();
+                console.log("Snapshot note ticks = " + snapshot_note_ticks + ", " + "Current ticks: " + cursor.tick);
+                console.log("Snapshot lyrics = " + snapshot_lyrics + ", " + "Current lyrics: " + lrc.charAt(lrcCursor-1));
+                if(snapshot_type == "addSyllable()")
+                {   // if the action is likely from addSyllable()
+                    if(cursor.tick == snapshot_note_ticks && lrc.charAt(lrcCursor-1) == snapshot_lyrics) 
+                    {   
+                        prevChar();                    
+                        updateDisplay();
+                        console.log("Post undo_stack = " + undo_stack);
+                        console.log("-----The action is likely from addSyllable(), roll back lrcCursor successfully.-----");
+                        return true;
+                    }
+                }
+                else if(snapshot_type == "addSynalepha()")
+                {
+                    if(snapshot_lyrics.charAt(snapshot_lyrics.length - 1) == lrc.charAt(lrcCursor-1) && cursor.tick == snapshot_note_ticks)
+                    {   // if the action is likely from addSynalepha()
+                        prevChar();
+                        updateDisplay();
+                        console.log("Post undo_stack = " + undo_stack);
+                        console.log("-----The action is likely from addSynalepha(), roll back lrcCursor successfully.-----");
+                        return true;
+                    }
+                }
+                // if not, put the snapshots back to the stack.
+                undo_stack.push(snapshot_note_ticks);
+                undo_stack.push(snapshot_lyrics);
+                undo_stack.push(snapshot_lrcCursor);
+                undo_stack.push(snapshot_type);
+                console.log("But the action that has been undone is not from this plugin");
+                return false;
+            }
+            console.log("But undo stack is empty.");
         }
     }
     
@@ -840,18 +956,20 @@ MuseScore
                 text: "请先选择一个歌词文件"
                 MouseArea
                 {
-                    id: lrcDisplayMouseArea
+                    id: lrcDisplayMouseArea //MouseArea for Clickable Lyrics Function
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
                     enabled: inputButtons.enabled
                     onClicked:
                     {
-                        console.log(mouse.x, mouse.y);
+                        console.log("Mouse clicked at X:" + mouse.x + " Y:" + mouse.y);
                         var found = findChar(mouse.x, mouse.y);
                         if(found != -1) 
                         {
-                            console.log("------Result: " + found + ", which is: " + lrc.charAt(found) + "-----");
+                            console.log("------Selected: " + lrc.charAt(found) + ", lrcCursor is at: " + found + "-----");
                             lrcCursor = found;
+                            undo_stack = [];
+                            console.log("Also undo_stack has been cleared.");
                         }
                         else console.log("given position has no char!");
                         updateDisplay();
@@ -864,7 +982,7 @@ MuseScore
         {
             id: lrcDisplayDummy
             visible: false
-            text: "请先选择一个歌词文件"
+            text: "buffer text"
         }
     }
 
@@ -1088,4 +1206,3 @@ MuseScore
         }
     }
 }
-
