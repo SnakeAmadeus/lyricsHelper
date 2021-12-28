@@ -1,5 +1,5 @@
 # lyricsHelper
-## EN:
+## (English) Introduction:
 A Musescore(3.5) plugin intends to help input lyrics. 
 It is designed for East Asian languages (monosyllabic languages like Sino-Tibetian languages) 
 but also potentially work for other language texts with some workarounds.
@@ -31,7 +31,7 @@ This design is for the sake of the continuity of workflow. The logic of finding 
 
 5. In the previous versions, users are able to simply undo plugin's action by hitting Ctrl+Z, however, this undo action won't revert the lyrics navigator's (that highlighted character) movements back in the lyrics box. In this version, the plugin has an emulated "undo stack" to identity whether the undone actions' source were from the lyricsHelper. Thus, the undo in the MuseScore can also revert back the lyrics nagivator's position. However, due to the limited API exposure of MuseScore, this feature is unstable and might break in some corner cases. Let's hope MuseScore 4.0 can give developers more API accessibilities!
 
-## CN:
+## (Simplified Chinese) 简介:
 此歌词插件适配MuseScore 3.5及以上的版本，这个插件是在MuseScore 3.6.2环境下开发的，我推荐您在使用本插件之前更新您的MuseScore至最新版本。
 此插件适合单音节语言(Monosyllabic Language)歌词的编辑，例如东亚语言：中文、粤语、日语、韩语。
 不推荐使用此插件编辑多音节语言例如印欧语系语言（比如英语）的歌词，但是您仍然可以使用“多音”(Synalepha)按钮来塞进多个音节。
