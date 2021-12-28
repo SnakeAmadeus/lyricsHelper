@@ -12,6 +12,7 @@ but also potentially work for other language texts with some workarounds.
 
 ### Functionality:
 You need to select a txt file by clicking "..." first to enable all the buttons. Or just drag-drop a text over the plugin!
+
 Use mouse to `right click` "..." to open settings pop-up. 
 
 1. "◀" and "▶" button moves the lyrics navigator (the highlighting on character) backward/foward by 1 step. Or just click on the lyrics to select the wanted character!
@@ -44,15 +45,18 @@ This design is for the sake of the continuity of workflow. The logic of finding 
 
 ### 功能说明
 您必须先点击“...”来加载一个歌词，或者直接把歌词文件拖拽到插件上也可以。
+
 用鼠标右键点击“...”可以打开设置窗口。
 
 1. "◀" 和 "▶" 键可以移动当前在下方歌词里选择的字，加粗的字即是下一个将被输入的歌词。新版本支持直接在歌词上点击选字了！
 
 注意：下面的“单音”、“转音”和“多音”按钮都需要在乐谱上选中*单个音符*的前提下才能运作。
+ 
 2. “单音” 按钮会将下方歌词里加粗的那个字添加到选中的音符下。如果在设置里面“替换模式”是开启的话，插件会覆盖选中音符下已存在的歌词，如果有转音线的存在，则会切断转音线后将歌词添加至音符下。
 歌词添加后，插件会自动选取下一个可用的音符（跳过连音线和休止符）。
 
 4. “转音” 按钮会将上一个歌词的字的转音线延申至当前选中的音符。
+
 转音线会自动按照乐谱规范来生成，违反规范的情况下则不会生成转音线。例如：如果用户选择了一串连音中的一个音符，并且连音的第一个音符下有歌词，那么在此处画转音线则不符合乐谱规范，插件则不会生成转音线。转音线也不能跨越休止符，因为这样的转音线是错误的记谱。
 在成功绘制转音线后，插件会自动选取下一个可用的音符（跳过连音线和休止符）。
 
