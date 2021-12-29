@@ -20,7 +20,7 @@ MuseScore
 {
     menuPath:    "Plugins.Lyrics Helper"
     version:     "3.0"
-    description: qsTr("A plugin intends to help input lyrics. It is designed for East Asian languages (monosyllabic languages like Sino-Tibetian languages) but also work for other language texts with workarounds.")
+    description: qsTr("A plugin intends to help input lyrics. It is designed for East Asian languages (monosyllabic languages like Sino-Tibetian languages) but also work for other language texts with workarounds.\nGithub Page: https://github.com/SnakeAmadeus/lyricsHelper\nby Snake4y5h")
     pluginType: "dock"
     dockArea: "Right"
 
@@ -52,7 +52,7 @@ MuseScore
             //console.log("You chose: " + filename)
             myFileLyrics.source = filename;
             //behaviors after reading the text file
-            lyricSource.text = "当前歌词：" + myFileLyrics.source.slice(8); //trim path name for better view
+            lyricSource.text = qsTr("Current File:") + myFileLyrics.source.slice(8); //trim path name for better view
             lyricSource.horizontalAlignment = Text.AlignLeft;
             lrc = myFileLyrics.read(); //file selection pop-up
             lrcDisplay.text = lrc; //update lyrics text to displayer
@@ -881,7 +881,7 @@ MuseScore
                 wrapMode: Text.WrapAnywhere
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignRight
-                text: "先点这儿打开一个歌词文件→"
+                text: qsTr("Click \"...\" to open a .txt file→")
             }
             Button 
             {
@@ -892,7 +892,7 @@ MuseScore
                 ToolTip.delay: 250
                 ToolTip.timeout: 5000
                 ToolTip.visible: hovered
-                ToolTip.text: "提示：鼠标右键点击\"...\"可以打开插件设置⚙"
+                ToolTip.text: qsTr("Tips：Right Click \"...\" to open Plugin Settings⚙")
                 Rectangle {  // background, also allowing the click
                     id: settingsOverlayColor
                     anchors.fill: settingsOverlay
@@ -909,6 +909,17 @@ MuseScore
                     {   
                         if(mouse.button == Qt.RightButton) buttonOpenFile.text = "⚙"; 
                         if(mouse.button == Qt.LeftButton) buttonOpenFile.text = "..."; 
+                        switch(Qt.locale().name.substring(0,2))
+                        {
+                            case "zh": 
+                                settingsPopup.width = 175;
+                                break;
+                            default: //default case is English
+                                settingsPopup.width = 215;
+                                //: Please check settingsPopup.width at this message's line in lyricsHelper.qml. You will find a switch() then add your language's case.
+                                console.log(qsTr("This is not a text for translation but just a notice: you may also need to change settingsPopup.width to adapt to your language's text space."))
+                                break;
+                        }
                         settingsOverlayColor.opacity = 0.2;
                     }
                     onReleased:{
@@ -919,9 +930,9 @@ MuseScore
                     {
                         id: settingsPopup
                         closePolicy: Popup.NoAutoClose
-                        x:-175
-                        y:-200
-                        width: 175
+                        x: -(settingsPopup.width)
+                        y: -200
+                        width: 215
                         height: 250
                         modal: true
                         focus: true
@@ -934,20 +945,20 @@ MuseScore
                             Text 
                             { 
                                 id: settingsTitle
-                                text: "<b style=\"font-size:8vw\">⚙ 插件设置 Settings：</b>" 
+                                text: qsTr("<b style=\"font-size:8vw\">⚙ Plugin Settings:</b>") 
                             }
                             CheckBox { 
                                 id: replaceModeCheckBox
                                 checked: replaceMode 
-                                text: qsTr("替换模式:\n如已有歌词则覆盖")}
+                                text: qsTr("Replace Mode:\noverwrites existed lyrics")}
                             CheckBox { 
                                 id: previewSoundModeCheckBox
                                 checked: previewSoundMode 
-                                text: qsTr("🔊预览音符声音")}
+                                text: qsTr("🔊Preview Note Sounds")}
                             Text 
                             { 
                                 id: maximumUndoStepsSpinBoxTitle
-                                text: "最大撤销步数：" 
+                                text: qsTr("Maximum Undo Steps:") 
                             }
                             SpinBox{
                                 id: maximumUndoStepsSpinBox
@@ -962,7 +973,7 @@ MuseScore
                                 }
                             }
                             Button { 
-                                text: "OK"
+                                text: qsTr("OK")
                                 width: syllableButton*0.5
                                 height: syllableButton*0.5
                                 onClicked: { 
@@ -1009,7 +1020,7 @@ MuseScore
             Button 
             {
                 id: syllableButton
-                text: "单音\nSyllable"
+                text: qsTr("Add\nSyllable")
                 onClicked:
                 {   
                     addSyllable(getSelectedCursor());
@@ -1018,7 +1029,7 @@ MuseScore
             Button 
             {
                 id: melismaButton
-                text: "转音\nMelisma"
+                text: qsTr("Extend\nMelisma")
                 onClicked:
                 {
                     addMelisma(getSelectedCursor());
@@ -1027,7 +1038,7 @@ MuseScore
             Button 
             {
                 id: synalephaButton
-                text: "多音\nSynalepha"
+                text: qsTr("Concatenate\nSynalepha")
                 onClicked:
                 {
                     addSynalepha(getSelectedCursor());
@@ -1055,7 +1066,7 @@ MuseScore
             Text
             {
                 id: lrcDisplay
-                text: "请先选择一个歌词文件"
+                text: qsTr("Please load a lyrics file first")
                 MouseArea
                 {
                     id: lrcDisplayMouseArea //MouseArea for Clickable Lyrics Function
