@@ -1,7 +1,7 @@
 # lyricsHelper
 ## (English) Introduction:
 A Musescore(3.5) plugin intends to help input lyrics. 
-It is designed for East Asian languages (monosyllabic languages like Sino-Tibetian languages) 
+It is designed for East Asian languages (monosyllabic languages like Chinese, Cantonese, Japanese and Korean etc.) 
 but also potentially work for other language texts with some workarounds.
 
 ### Installation:
