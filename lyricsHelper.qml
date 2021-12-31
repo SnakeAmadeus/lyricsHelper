@@ -1136,6 +1136,36 @@ MuseScore
             text: "buffer text"
         }
     }
+    
+    Shortcut //addSyllable() shortcut
+    {
+        id: syllableButtonShortcut
+        sequence: "Alt+S"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            addSyllable(getSelectedCursor());
+        }
+    }
+
+    Shortcut //addMelisma() shortcut
+    {
+        id: melismaButtonShortcut
+        sequence: "Alt+D"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            addMelisma(getSelectedCursor());
+        }
+    }
+
+    Shortcut //addSynalepha() shortcut
+    {
+        id: synalephaButtonShortcut
+        sequence: "Alt+X"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            addSynalepha(getSelectedCursor());
+        }
+    }
 
     //for debugging purpose. copy-pasted from https://github.com/mirabilos/mscore-plugins/blob/master/notenames-as-lyrics.qml
     function nameElementType(elementType) {
