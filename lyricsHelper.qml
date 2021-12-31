@@ -9,7 +9,6 @@
 //==============================================
 import QtQuick 2.9
 import QtQuick.Dialogs 1.2
-import QtQuick.Controls 2.0
 import QtQuick.Controls 2.2
 import MuseScore 3.0
 import FileIO 3.0
@@ -672,7 +671,9 @@ MuseScore
         var next = lrcCursor + 1;
         if(next >= lrc.length) //loops back to the begining if the @lrcCursor reaches EOF.
         { 
-            lrcCursor = 0; return false;
+            lrcCursor = 0; 
+            if(lrc.charAt(lrcCursor) == '\n' || lrc.charAt(lrcCursor) == ' ') nextChar();
+            return false;
         }
         else //normal case
         {
@@ -694,7 +695,9 @@ MuseScore
         var prev = lrcCursor - 1;
         if(prev < 0) //loops back to the begining if the @lrcCursor reaches begining.
         { 
-            lrcCursor = lrc.length - 1; return false;
+            lrcCursor = lrc.length - 1; 
+            if(lrc.charAt(lrcCursor) == '\n' || lrc.charAt(lrcCursor) == ' ') prevChar(); //avoid selecting EOF
+            return false;
         }
         else //normal case
         {
@@ -827,13 +830,15 @@ MuseScore
                 var snapshot_lyrics = undo_stack.pop();
                 var snapshot_note_ticks = undo_stack.pop();
                 var cursor = getSelectedCursor();
+                var tempLrcCursor = lrcCursor;
+                prevChar(); //get last lrcCursor position but skip all the whitespaces and \n.
+                var current_lyrics = lrc.charAt(lrcCursor);
                 console.log("Snapshot note ticks = " + snapshot_note_ticks + ", " + "Current ticks: " + cursor.tick);
-                console.log("Snapshot lyrics = " + snapshot_lyrics + ", " + "Current lyrics: " + lrc.charAt(lrcCursor-1));
+                console.log("Snapshot lyrics = " + snapshot_lyrics + ", " + "Current lyrics: " + current_lyrics);
                 if(snapshot_type == "addSyllable()")
                 {   // if the action is likely from addSyllable()
-                    if(cursor.tick == snapshot_note_ticks && lrc.charAt(lrcCursor-1) == snapshot_lyrics) 
+                    if(cursor.tick == snapshot_note_ticks && current_lyrics == snapshot_lyrics) 
                     {   
-                        prevChar();                    
                         updateDisplay();
                         console.log("Post undo_stack = " + undo_stack);
                         console.log("-----The action is likely from addSyllable(), roll back lrcCursor successfully.-----");
@@ -842,9 +847,8 @@ MuseScore
                 }
                 else if(snapshot_type == "addSynalepha()")
                 {
-                    if(snapshot_lyrics.charAt(snapshot_lyrics.length - 1) == lrc.charAt(lrcCursor-1) && cursor.tick == snapshot_note_ticks)
+                    if(snapshot_lyrics.charAt(snapshot_lyrics.length - 1) == current_lyrics && cursor.tick == snapshot_note_ticks)
                     {   // if the action is likely from addSynalepha()
-                        prevChar();
                         updateDisplay();
                         console.log("Post undo_stack = " + undo_stack);
                         console.log("-----The action is likely from addSynalepha(), roll back lrcCursor successfully.-----");
@@ -856,6 +860,7 @@ MuseScore
                 undo_stack.push(snapshot_lyrics);
                 undo_stack.push(snapshot_lrcCursor);
                 undo_stack.push(snapshot_type);
+                lrcCursor = tempLrcCursor; //also roll back the lrcCursor
                 console.log("But the action that has been undone is not from this plugin");
                 updateDisplay(); 
                 return false;
@@ -864,6 +869,7 @@ MuseScore
         }
     }
     
+    //main UI body of the plugin
     Column 
     {
         id: controls 
@@ -1090,6 +1096,35 @@ MuseScore
                         else console.log("given position has no char!");
                         updateDisplay();
                     }
+                }
+            }
+            MouseArea
+            {
+                id: lrcDisplayMenuMouseArea
+                anchors.left: parent.left
+                anchors.top: parent.top
+                height: lrcDisplay.height
+                width: parent.width
+                acceptedButtons: Qt.RightButton
+                onClicked:
+                {
+                    lrcDisplayMenu.x = mouse.x-10; lrcDisplayMenu.y = mouse.y-10;
+                    lrcDisplayMenu.open();
+                }
+                Menu
+                {
+                    id: lrcDisplayMenu
+                    scale: 0.9
+                    spacing: 0.5
+                    bottomPadding: 3
+                    leftPadding: 3
+                    topPadding: 3
+                    rightPadding: 3
+                    MenuItem { text: "Copy to Clip Board"}
+                    MenuItem { text: "Edit Lyrics"}
+                    MenuSeparator { }
+                    MenuItem { text: "Japanese Kanji to Furigana\n(requires Internet connection)"}
+                    MenuItem { text: "English Hyphenation\n(requires Internet connection)"}
                 }
             }
         }
