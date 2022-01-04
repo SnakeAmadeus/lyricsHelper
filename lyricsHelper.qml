@@ -10,10 +10,11 @@
 import QtQuick 2.9
 import QtQuick.Dialogs 1.2
 import QtQuick.Controls 2.2
+import QtQml 2.2
 import MuseScore 3.0
 import FileIO 3.0
+import Qt.labs.folderlistmodel 2.2
 import "zparkingb/selectionhelper.js" as SelHelper
-
 
 MuseScore 
 {
@@ -31,7 +32,7 @@ MuseScore
     //@previewSoundMode decides whether preview note's sound when cursor advances
     property var previewSoundMode: 1;
     //@maximumUndoStep decides the max amount of actions that is done by lyricsHelper can be undone.
-    property var maximumUndoSteps: 25;
+    property var maximumUndoSteps: 50;
 
     property var lrc: String("");
     property var lrcCursor: 0;
@@ -42,6 +43,18 @@ MuseScore
     {
         id: myFileLyrics
         onError: console.log(msg + "  Filename = " + myFileLyrics.source);
+    }
+
+    FileDialog 
+    {
+        id: fileDialog
+        title: qsTr("Please choose a .txt or .lrc file")
+        nameFilters: ["lyrics files (*.txt *.lrc)"]
+        onAccepted: 
+        {
+            var filename = fileDialog.fileUrl;
+            acceptFile(filename);
+        }
     }
     
     function acceptFile(filename) //helper function that reads a file for widget fileDialog and fileDrop
@@ -66,18 +79,45 @@ MuseScore
         }
     }
 
-    FileDialog 
+    //Functionality: click on lyricSource to auto load a text file to the lyricsHelper
+    //that contains the current score's name, in the same path as the current score
+    property var curScorePath : "";
+    property var curScoreFileName : "";
+    property var curScoreName : "";
+    function autoLoadLyrics(scorePath)
     {
-        id: fileDialog
-        title: qsTr("Please choose a .txt or .lrc file")
-        nameFilters: ["lyrics files (*.txt *.lrc)"]
-        onAccepted: 
+        myFileScore.source = "file:///" + curScore.path;
+        console.log("autoLoadLyrics(): Current Score is: " + myFileScore.source);
+        curScoreFileName = myFileScore.source.split('/').pop();
+        curScorePath = myFileScore.source.slice(0,myFileScore.source.lastIndexOf(curScoreFileName));
+        curScoreName = curScoreFileName.split('.')[0];
+        searchTxtFolderListModel.folder = curScorePath;
+        curScorePath = curScorePath.slice(8);
+        lyricSource.horizontalAlignment = Text.AlignHCenter;
+        lyricSource.text = qsTr("Auto Loading Lyrics...");
+        searchTxtDelayRunning.start();
+    }
+    FileIO //FileIO stores the path of the current score
+    {
+        id: myFileScore
+        onError: console.log(msg + "  Filename = " + myFileScore.source);
+    }
+    FolderListModel //FolderListModel assists autoLoadLyrics() to search .txt files in the specified folder
+    {
+        id: searchTxtFolderListModel
+        function searchTxt()
         {
-            var filename = fileDialog.fileUrl;
-            acceptFile(filename)
+            for(var i = 0; i < searchTxtFolderListModel.count; i++)
+                  if(searchTxtFolderListModel.get(i, "fileName").split('.').pop() == "txt")
+                        if (searchTxtFolderListModel.get(i, "fileName").includes(curScoreName)) 
+                              {acceptFile(searchTxtFolderListModel.get(i, "fileURL")); return true;}
+            //in case nothing was found:
+            lyricSource.text = qsTr("Couldn't find any .txt file contains\nthe Current Score's name in the same path."); 
+            autoReadLyricsFailedMessage.start();
         }
     }
-
+    
+    //Functionality: Drag&Drop lyrics text file to the plugin
     //workarounds for DropArea validates file extensions because the DropArea.keys were not functioning properly
     //Special Thanks to https://stackoverflow.com/a/28800328
     MouseArea 
@@ -87,7 +127,6 @@ MuseScore
         enabled: !fileDrop.enabled
         onContainsMouseChanged: fileDrop.enabled = true
     }
-
     DropArea
     {
         id: fileDrop
@@ -804,6 +843,7 @@ MuseScore
             //console.log("post undo_stack: " + undo_stack);
         }
     }
+    property var selectedScore: "";
     onScoreStateChanged: 
     {   
         if(state.undoRedo)
@@ -867,6 +907,17 @@ MuseScore
             }
             console.log("But undo stack is empty.");
         }
+        if(state.selectionChanged)
+        {
+            var scorePath = curScore.path + curScore.scoreName + ".musicxml";
+            if(scorePath != selectedScore)
+            {
+                console.log("Selected Score Changed!");
+                selectedScore = scorePath;
+                myFileScore.source = "file:///" + scorePath;
+                autoLoadLyrics(myFileScore.source);
+            }
+        }
     }
     
     //main UI body of the plugin
@@ -888,6 +939,23 @@ MuseScore
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignRight
                 text: qsTr("Click \"...\" to open a .txt file→")
+                MouseArea //click lyricSource to call autoLoadLyrics();
+                {
+                    id: autoReadLyricsMouseArea
+                    acceptedButtons: Qt.LeftButton
+                    anchors.fill: parent
+                    onClicked: autoLoadLyrics();
+                }
+                Timer // in case of autoLoadLyrics() not finding any matched .txt files, prompt failed message and roll back the lyrics
+                {   
+                    id: autoReadLyricsFailedMessage
+                    repeat: false
+                    interval: 1000
+                    onTriggered: {
+                        if(myFileLyrics.source) acceptFile(myFileLyrics.source);
+                        else {lyricSource.horizontalAlignment = Text.AlignRight; lyricSource.text = qsTr("Click \"...\" to open a .txt file→");}
+                    } 
+                }
             }
             Button 
             {
@@ -1134,6 +1202,12 @@ MuseScore
             id: lrcDisplayDummy
             visible: false
             text: "buffer text"
+            Timer { 
+                id: searchTxtDelayRunning // for autoLoadLyrics()
+                repeat: false
+                interval: 250
+                onTriggered: searchTxtFolderListModel.searchTxt()
+            } 
         }
     }
     
@@ -1167,6 +1241,14 @@ MuseScore
         }
     }
 
+    Shortcut
+    {
+        id: autoChangeLyrics
+        sequence: "Alt+L"
+        context: Qt.ApplicationShortcut
+        onActivated: autoLoadLyrics();
+    }
+    
     //for debugging purpose. copy-pasted from https://github.com/mirabilos/mscore-plugins/blob/master/notenames-as-lyrics.qml
     function nameElementType(elementType) {
         switch (elementType) {
