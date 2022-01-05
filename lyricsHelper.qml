@@ -943,7 +943,10 @@ MuseScore
                 {
                     id: autoReadLyricsMouseArea
                     acceptedButtons: Qt.LeftButton
-                    anchors.fill: parent
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    height: parent.height - 9 //avoid users misclicking autoLoadLyrics() when clicking inputButtons
+                    width: parent.width
                     onClicked: autoLoadLyrics();
                 }
                 Timer // in case of autoLoadLyrics() not finding any matched .txt files, prompt failed message and roll back the lyrics
@@ -1087,8 +1090,10 @@ MuseScore
                 width: syllableButton.width/4
                 onClicked:
                 {
+                    var original = lrcCursor;
                     prevChar();
                     updateDisplay();
+                    pushToUndoStack(false, "彁:" + original.toString() + "->" + lrcCursor.toString());
                 }
             }
             Button 
@@ -1124,9 +1129,11 @@ MuseScore
                 text: "<font size=\"5\">▶</font>"
                 width: syllableButton.width/4
                 onClicked:
-                {
+                {   
+                    var original = lrcCursor;
                     nextChar();
                     updateDisplay();
+                    pushToUndoStack(false, "彁:" + original.toString() + "->" + lrcCursor.toString());
                 }
             }
         }
@@ -1166,37 +1173,8 @@ MuseScore
                     }
                 }
             }
-            MouseArea
-            {
-                id: lrcDisplayMenuMouseArea
-                anchors.left: parent.left
-                anchors.top: parent.top
-                height: lrcDisplay.height
-                width: parent.width
-                acceptedButtons: Qt.RightButton
-                onClicked:
-                {
-                    lrcDisplayMenu.x = mouse.x-10; lrcDisplayMenu.y = mouse.y-10;
-                    lrcDisplayMenu.open();
-                }
-                Menu
-                {
-                    id: lrcDisplayMenu
-                    scale: 0.9
-                    spacing: 0.5
-                    bottomPadding: 3
-                    leftPadding: 3
-                    topPadding: 3
-                    rightPadding: 3
-                    MenuItem { text: "Copy to Clip Board"}
-                    MenuItem { text: "Edit Lyrics"}
-                    MenuSeparator { }
-                    MenuItem { text: "Japanese Kanji to Furigana\n(requires Internet connection)"}
-                    MenuItem { text: "English Hyphenation\n(requires Internet connection)"}
-                }
-            }
         }
-        
+
         Text
         {
             id: lrcDisplayDummy
@@ -1211,6 +1189,37 @@ MuseScore
         }
     }
     
+    MouseArea
+    {   //Right Button Menu for lrcDisplayScrollView. This MouseArea is outside of the main Column because 
+        //there're mouse events capturing conflicts between ScrollView & MouseArea objects
+        id: lrcDisplayMenuMouseArea
+        x: lrcDisplayScrollView.x
+        y: lrcDisplayScrollView.y
+        height: lrcDisplay.height > lrcDisplayScrollView.height ? lrcDisplayScrollView.height : lrcDisplay.height
+        width: lrcDisplayScrollView.width
+        acceptedButtons: Qt.RightButton
+        onClicked:
+        {
+            lrcDisplayMenu.x = mouse.x-10; lrcDisplayMenu.y = mouse.y-10;
+            lrcDisplayMenu.open();
+        }
+        Menu
+        {
+            id: lrcDisplayMenu
+            scale: 0.9
+            spacing: 0.5
+            bottomPadding: 3
+            leftPadding: 3
+            topPadding: 3
+            rightPadding: 3
+            MenuItem { text: "Copy to Clip Board"}
+            MenuItem { text: "Edit Lyrics"}
+            MenuSeparator { }
+            MenuItem { text: "Japanese Kanji to Furigana\n(requires Internet connection)"}
+            MenuItem { text: "English Hyphenation\n(requires Internet connection)"}
+        }
+    }
+
     Shortcut //addSyllable() shortcut
     {
         id: syllableButtonShortcut
@@ -1241,7 +1250,7 @@ MuseScore
         }
     }
 
-    Shortcut
+    Shortcut //autoLoadLyrics() shortcut
     {
         id: autoChangeLyrics
         sequence: "Alt+L"
