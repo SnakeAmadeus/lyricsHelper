@@ -843,7 +843,6 @@ MuseScore
             //console.log("post undo_stack: " + undo_stack);
         }
     }
-    property var selectedScore: "";
     onScoreStateChanged: 
     {   
         if(state.undoRedo)
@@ -906,17 +905,6 @@ MuseScore
                 return false;
             }
             console.log("But undo stack is empty.");
-        }
-        if(state.selectionChanged)
-        {
-            var scorePath = curScore.path + curScore.scoreName + ".musicxml";
-            if(scorePath != selectedScore)
-            {
-                console.log("Selected Score Changed!");
-                selectedScore = scorePath;
-                myFileScore.source = "file:///" + scorePath;
-                autoLoadLyrics(myFileScore.source);
-            }
         }
     }
     
