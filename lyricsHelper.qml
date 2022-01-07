@@ -86,7 +86,7 @@ MuseScore
     property var curScoreName : "";
     function autoLoadLyrics(scorePath)
     {
-        myFileScore.source = "file:///" + curScore.path;
+        myFileScore.source = "file:///" + curScore.path.replace(/\\/g, '/'); //in some MuseScore's languages context, the os.sep is \ instead of / idk why
         console.log("autoLoadLyrics(): Current Score is: " + myFileScore.source);
         curScoreFileName = myFileScore.source.split('/').pop();
         curScorePath = myFileScore.source.slice(0,myFileScore.source.lastIndexOf(curScoreFileName));
@@ -109,7 +109,7 @@ MuseScore
         {
             for(var i = 0; i < searchTxtFolderListModel.count; i++)
                   if(searchTxtFolderListModel.get(i, "fileName").split('.').pop() == "txt")
-                        if (searchTxtFolderListModel.get(i, "fileName").includes(curScoreName)) 
+                        if (searchTxtFolderListModel.get(i, "fileName").toLowerCase().includes(curScoreName.toLowerCase())) //make it non-case-sensitive
                               {acceptFile(searchTxtFolderListModel.get(i, "fileURL")); return true;}
             //in case nothing was found:
             lyricSource.text = qsTr("Couldn't find any .txt file contains\nthe Current Score's name in the same path."); 
