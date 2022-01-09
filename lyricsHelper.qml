@@ -84,9 +84,11 @@ MuseScore
     property var curScorePath : "";
     property var curScoreFileName : "";
     property var curScoreName : "";
-    function autoLoadLyrics(scorePath)
+    function autoLoadLyrics()
     {
-        myFileScore.source = "file:///" + curScore.path.replace(/\\/g, '/'); //in some MuseScore's languages context, the os.sep is \ instead of / idk why
+        var scorePath = curScore.path.replace(/\\/g, '/')
+        if(scorePath.charAt(0) == '/') scorePath = scorePath.substring(1); else return false;
+        myFileScore.source = "file:///" + scorePath; //in some MuseScore's languages context, the os.sep is \ instead of / idk why
         console.log("autoLoadLyrics(): Current Score is: " + myFileScore.source);
         curScoreFileName = myFileScore.source.split('/').pop();
         curScorePath = myFileScore.source.slice(0,myFileScore.source.lastIndexOf(curScoreFileName));
@@ -1136,6 +1138,7 @@ MuseScore
             {
                 id: lrcDisplay
                 text: qsTr("Please load a lyrics file first")
+                font.family: "Heiti SC"
                 MouseArea
                 {
                     id: lrcDisplayMouseArea //MouseArea for Clickable Lyrics Function
@@ -1168,6 +1171,7 @@ MuseScore
             id: lrcDisplayDummy
             visible: false
             text: "buffer text"
+            font.family: lrcDisplay.font.family
             Timer { 
                 id: searchTxtDelayRunning // for autoLoadLyrics()
                 repeat: false
