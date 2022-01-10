@@ -87,7 +87,7 @@ MuseScore
     function autoLoadLyrics()
     {
         var scorePath = curScore.path.replace(/\\/g, '/')
-        if(scorePath.charAt(0) == '/') scorePath = scorePath.substring(1); else return false;
+        if(scorePath.charAt(0) == '/') scorePath = scorePath.substring(1);
         myFileScore.source = "file:///" + scorePath; //in some MuseScore's languages context, the os.sep is \ instead of / idk why
         console.log("autoLoadLyrics(): Current Score is: " + myFileScore.source);
         curScoreFileName = myFileScore.source.split('/').pop();
@@ -760,55 +760,80 @@ MuseScore
     //This is a very cheesy solution but worked pretty well.
     property var verticalIncrement: 0;
     property var whitespaceIncrement: 0;
-    function getVerticalIncrement()
-    {
+    property var newlinePositions: [0]; 
+    property var newlineVerticalIncrements: [];
+    function getVerticalIncrement() 
+    { //use a list @newlinePositions to store all the position index of beigning of newlines in lrc
+        newlinePositions = [0]; 
+        for(var i = 0; i < lrc.length; i++)
+            if (lrc.charAt(i) == '\n') newlinePositions.push(i);
         lrcDisplayDummy.text = convertLineBreak("1");
         verticalIncrement = lrcDisplayDummy.height;
         whitespaceIncrement = lrcDisplayDummy.width;
         lrcDisplayDummy.text = convertLineBreak("1 ");
         whitespaceIncrement = lrcDisplayDummy.width - whitespaceIncrement;
-        lrcDisplayDummy.text = convertLineBreak("1\n1");
-        verticalIncrement = lrcDisplayDummy.height - verticalIncrement;
-        console.log("vertical line increment: " + verticalIncrement);
+        //on MacOS, each lines' height is slightly different to each other depends on the text. So we use a list to track every line's pixel height.
+        newlineVerticalIncrements = [];
+        if(Qt.platform.os == "osx") 
+        {
+            for(var i = 0, j = 0; i < lrc.length; i++)
+                if (lrc.charAt(i) == '\n')
+                {
+                    lrcDisplayDummy.text = convertLineBreak(lrc.substring(j,i));
+                    newlineVerticalIncrements.push(lrcDisplayDummy.height);
+                    j = i + 1;
+                }
+            console.log("newlineVerticalIncrements" + newlineVerticalIncrements);
+        }
+        else //on Windows, each line's height is always fixed. So no need to worry about it. One line's height for all.
+        {
+            lrcDisplayDummy.text = convertLineBreak("1\n1");
+            verticalIncrement = lrcDisplayDummy.height - verticalIncrement;
+            console.log("vertical line increment: " + verticalIncrement);
+        }
     }
-
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
         var targetRow = Math.ceil(posY / verticalIncrement); //target row
-        //console.log("target row: " + targetRow);
         var txt = lrc; //buffer the lyrics
-        var findRow = 1; //cursor row, start with 1
-        lrcDisplayDummy.text = ""; 
-        for(var i = 0; i < txt.length; i++)
+        var rowPos = 0; //retrieve the starting index in lrc of the target row
+        if(Qt.platform.os == "osx") //MacOS case for rowPos
         {
-            //console.log("current checking character: " + txt.charAt(i) + ", at index " + i)
-            if(txt.charAt(i) == '\n') 
+            var sum = 0;
+            for(var i = 0; i < newlineVerticalIncrements.length; i++)
             {
-                findRow++; 
-                lrcDisplayDummy.text = ""; 
-                //console.log("go to new line")
+                sum += newlineVerticalIncrements[i]; //add line heights until reaches user click posY
+                if(sum > posY) {rowPos = newlinePositions[i]; sum = -1; /*found mark*/ break;}
             }
-            if(findRow == targetRow)
+            if(sum != -1) rowPos = newlinePositions[newlineVerticalIncrements.length]; //if user click is the last EOF line
+        }
+        else rowPos = newlinePositions[targetRow-1]
+        lrcDisplayDummy.text = ""; 
+        for(var i = rowPos; i < txt.length; i++)
+        {
+            //forcefully calculate the horizontal size of lyrics by append characters to the invisible lrcDisplayDummy
+            //THIS IS SUCH A DIRTY WORKAROUND
+            //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap trailing whitespaces here:
+            lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/\s+$/gm, ' '); 
+            //console.log("buffered text: " + lrcDisplayDummy.text)
+            if(posX < lrcDisplayDummy.width) 
             {
-                //forcefully calculate the horizontal size of lyrics by append characters to the invisible lrcDisplayDummy
-                //THIS IS SUCH A DIRTY WORKAROUND
-                //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap here idk why :
-                lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/\s+$/gm, ' '); 
-                //console.log("buffered text: " + lrcDisplayDummy.text)
-                if(posX < lrcDisplayDummy.width) 
+                if(txt.charAt(i) == ' ') //if user selects a whitespace, snap to the nearest character
                 {
-                    if(txt.charAt(i) == ' ') //if user selects a whitespace, jump to the nearest character
-                    {
-                        if(i == 0 || i == txt.length - 1) return -1; //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
-                        if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) == '\n' ) return -1;
-                        if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) return i + 1;
-                        if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) return i - 1;
-                        return posX - (lrcDisplayDummy.width - whitespaceIncrement) < lrcDisplayDummy.width - posX ? i-1 : i+1;
-                    }    
-                    return i;
-                }
+                    //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
+                    if(i == 0 || i == txt.length - 1) return -1; 
+                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) == '\n' ) return -1;
+                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) {lrcCursor = i; nextChar(); return lrcCursor;}
+                    if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) {lrcCursor = i; prevChar(); return lrcCursor;}
+                    //snap to the nearest character (use prevChar() and nextChar() to also skip all the nearest whitespaces)
+                    if(posX - (lrcDisplayDummy.width - whitespaceIncrement) < lrcDisplayDummy.width - posX)
+                        {lrcCursor = i; prevChar(); return lrcCursor;}
+                    else
+                        {lrcCursor = i; nextChar(); return lrcCursor;}
+                }    
+                return i;
             }
-            if(findRow > targetRow) return -1;
+            if(i == txt.length - 1 || txt.charAt(i+1) == '\n') return -1; //if reach the EOF or not found a character in the given X position before going to next line
         }
         return -1;
     }
@@ -1138,7 +1163,6 @@ MuseScore
             {
                 id: lrcDisplay
                 text: qsTr("Please load a lyrics file first")
-                font.family: "Heiti SC"
                 MouseArea
                 {
                     id: lrcDisplayMouseArea //MouseArea for Clickable Lyrics Function
