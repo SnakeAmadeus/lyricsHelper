@@ -86,7 +86,7 @@ MuseScore
     property var curScoreName : "";
     function autoLoadLyrics()
     {
-        var scorePath = curScore.path.replace(/\\/g, '/')
+        var scorePath = curScore.path.replace(/\\/g, '/');
         if(scorePath.charAt(0) == '/') scorePath = scorePath.substring(1);
         myFileScore.source = "file:///" + scorePath; //in some MuseScore's languages context, the os.sep is \ instead of / idk why
         console.log("autoLoadLyrics(): Current Score is: " + myFileScore.source);
@@ -805,7 +805,7 @@ MuseScore
                 sum += newlineVerticalIncrements[i]; //add line heights until reaches user click posY
                 if(sum > posY) {rowPos = newlinePositions[i]; sum = -1; /*found mark*/ break;}
             }
-            if(sum != -1) rowPos = newlinePositions[newlineVerticalIncrements.length]; //if user click is the last EOF line
+            if(sum != -1) rowPos = newlinePositions[newlineVerticalIncrements.length]; //if user click is the EOF empty line
         }
         else rowPos = newlinePositions[targetRow-1]
         lrcDisplayDummy.text = ""; 
@@ -1001,17 +1001,9 @@ MuseScore
                     {   
                         if(mouse.button == Qt.RightButton) buttonOpenFile.text = "⚙"; 
                         if(mouse.button == Qt.LeftButton) buttonOpenFile.text = "..."; 
-                        switch(Qt.locale().name.substring(0,2))
-                        {
-                            case "zh": 
-                                settingsPopup.width = 175;
-                                break;
-                            default: //default case is English
-                                settingsPopup.width = 215;
-                                //: Please check settingsPopup.width at this message's line in lyricsHelper.qml. You will find a switch() then add your language's case.
-                                console.log(qsTr("This is not a text for translation but just a notice: you may also need to change settingsPopup.width to adapt to your language's text space."))
-                                break;
-                        }
+                        var componentWidths = [previewSoundModeCheckBox.width, replaceModeCheckBox.width,
+                            settingsTitle.width, maximumUndoStepsSpinBoxTitle.width, maximumUndoStepsSpinBox.width ];
+                        settingsPopup.width = Math.max.apply(Math, componentWidths) + 30; //resize settingPopup's width depends on diff. language's text length.
                         settingsOverlayColor.opacity = 0.2;
                     }
                     onReleased:{
