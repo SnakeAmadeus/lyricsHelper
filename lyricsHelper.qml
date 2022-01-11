@@ -107,8 +107,10 @@ MuseScore
     FolderListModel //FolderListModel assists autoLoadLyrics() to search .txt files in the specified folder
     {
         id: searchTxtFolderListModel
+        property var tempLrcCursor : 0
         function searchTxt()
         {
+            tempLrcCursor = lrcCursor;
             for(var i = 0; i < searchTxtFolderListModel.count; i++)
                   if(searchTxtFolderListModel.get(i, "fileName").split('.').pop() == "txt")
                         if (searchTxtFolderListModel.get(i, "fileName").toLowerCase().includes(curScoreName.toLowerCase())) //make it non-case-sensitive
@@ -970,7 +972,7 @@ MuseScore
                     repeat: false
                     interval: 1000
                     onTriggered: {
-                        if(myFileLyrics.source) acceptFile(myFileLyrics.source);
+                        if(myFileLyrics.source) {acceptFile(myFileLyrics.source); lrcCursor = searchTxtFolderListModel.tempLrcCursor; updateDisplay();}
                         else {lyricSource.horizontalAlignment = Text.AlignRight; lyricSource.text = qsTr("Click \"...\" to open a .txt file→");}
                     } 
                 }
@@ -1188,6 +1190,7 @@ MuseScore
             visible: false
             text: "buffer text"
             font.family: lrcDisplay.font.family
+            font.pointSize: lrcDisplay.font.pointSize
             Timer { 
                 id: searchTxtDelayRunning // for autoLoadLyrics()
                 repeat: false
@@ -1210,6 +1213,32 @@ MuseScore
         {
             lrcDisplayMenu.x = mouse.x-10; lrcDisplayMenu.y = mouse.y-10;
             lrcDisplayMenu.open();
+        }
+        property var wheelIncrement: 0;
+        onWheel:
+        { //Ctrl + Mouse Scroll to zoom in&out the lyrics display
+            if ((wheel.modifiers & Qt.ControlModifier) && inputButtons.enabled)
+            {
+                if((lrcDisplay.font.pointSize < 12 || wheel.angleDelta.y < 0) && (lrcDisplay.font.pointSize > 8 || wheel.angleDelta.y > 0))
+                {
+                     wheelIncrement += (wheel.angleDelta.y / 360); //makes mouse scorlling 3 steps as the minimum unit
+                     if(Math.floor(wheelIncrement) >= 1 || Math.ceil(wheelIncrement) <= -1)
+                     {
+                        lrcDisplay.font.pointSize = lrcDisplay.font.pointSize + Math.floor(wheelIncrement);
+                        getVerticalIncrement();
+                        wheelIncrement = 0;
+                     }
+                } wheel.accepted=true;
+            } 
+            else wheel.accepted=false; //aviod conflicts between MouseArea's onWheel and scrollView's scrolling
+        }
+        Shortcut //Reset lrcDisplay's font size to its default (9)
+        {
+            id: resetLrcDisplaySize
+            enabled: inputButtons.enabled
+            sequence: "Alt+0"
+            context: Qt.ApplicationShortcut
+            onActivated: {lrcDisplay.font.pointSize = 9; lrcDisplayMenuMouseArea.wheelIncrement = 0; getVerticalIncrement();}
         }
         Menu
         {
