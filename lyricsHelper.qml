@@ -14,6 +14,7 @@ import QtQml 2.2
 import MuseScore 3.0
 import FileIO 3.0
 import Qt.labs.folderlistmodel 2.2
+import QtQuick.XmlListModel 2.0
 import "zparkingb/selectionhelper.js" as SelHelper
 
 MuseScore 
@@ -27,15 +28,20 @@ MuseScore
     implicitHeight: controls.implicitHeight * 1.5
     implicitWidth: controls.implicitWidth
 
-    //@replaceMode indicates whether replacing the existed lyrics when encountering a lyrics conflict. 0 = OFF, 1 = ON.
-    property var replaceMode : 1;
-    //@previewSoundMode decides whether preview note's sound when cursor advances
-    property var previewSoundMode: 1;
-    //@maximumUndoStep decides the max amount of actions that is done by lyricsHelper can be undone.
-    property var maximumUndoSteps: 50;
+    //@replaceMode indicates whether replacing the existed lyrics when encountering a lyrics conflict. default = true
+    property alias replaceMode : replaceModeCheckBox.checked;
+    //@previewSoundMode decides whether preview note's sound when cursor advances. default = true
+    property alias previewSoundMode: previewSoundModeCheckBox.checked;
+    //@maximumUndoStep decides the max amount of actions that is done by lyricsHelper can be undone. default = 50
+    property alias maximumUndoSteps: maximumUndoStepsSpinBox.value;
 
     property var lrc: String("");
     property var lrcCursor: 0;
+
+    //@hyphenatedMode decides whether the single unit of lyrics selection is between whitespaces or (whitespaces and hyphens.) default = false
+    property alias hyphenatedMode: hyphenatedModeToggle.checked;
+    property var separator: [' '];
+    function isSeparator(s) {for(var i = 0; i < separator.length; i++) {if (s == separator[i]) return i.toString();} return false;}
 
     onRun: {}
 
@@ -64,19 +70,23 @@ MuseScore
             //console.log("You chose: " + filename)
             myFileLyrics.source = filename;
             //behaviors after reading the text file
-            lyricSource.text = qsTr("Current File:") + myFileLyrics.source.slice(8); //trim path name for better view
+            lyricSource.text = qsTr("Current File: ") + myFileLyrics.source.slice(8); //trim path name for better view
             lyricSource.horizontalAlignment = Text.AlignLeft;
-            lrc = myFileLyrics.read(); //file selection pop-up
-            lrcDisplay.text = lrc; //update lyrics text to displayer
-            lrcCursor = 0; //reset @lrcCursor
-            inputButtons.enabled = true; //recover input buttons' availability
-            updateDisplay();
-            //resize the pannel
-            controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
-            lrcDisplayScrollView.height = inputButtons.height * 8
-            getVerticalIncrement();
-            undo_stack = [];
+            acceptLyrics(myFileLyrics.read());
         }
+    }
+    function acceptLyrics(text)
+    {
+        lrc = text;
+        lrcDisplay.text = text; //update lyrics text to displayer
+        lrcCursor = 0; //reset @lrcCursor
+        inputButtons.enabled = true; //recover input buttons' availability
+        updateDisplay();
+        //resize the pannel
+        controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
+        lrcDisplayScrollView.height = inputButtons.height * 8
+        getVerticalIncrement();
+        undo_stack = [];
     }
 
     //Functionality: click on lyricSource to auto load a text file to the lyricsHelper
@@ -715,7 +725,7 @@ MuseScore
         if(next >= lrc.length) //loops back to the begining if the @lrcCursor reaches EOF.
         { 
             lrcCursor = 0; 
-            if(lrc.charAt(lrcCursor) == '\n' || lrc.charAt(lrcCursor) == ' ') nextChar();
+            if(lrc.charAt(lrcCursor) == '\n' || isSeparator(lrc.charAt(lrcCursor))) nextChar();
             return false;
         }
         else //normal case
@@ -724,7 +734,7 @@ MuseScore
             //check if the next character is "\n" or white space, if it is, skip first
             if(next <= lrc.length - 1) //check if index out of bound error first
             {
-                if(lrc.charAt(next) == '\n' || lrc.charAt(next) == ' ')
+                if(lrc.charAt(next) == '\n' || isSeparator(lrc.charAt(next)))
                 {
                     nextChar(); return false; //continously skip until no '\n' or whitespaces were found
                 }
@@ -739,7 +749,7 @@ MuseScore
         if(prev < 0) //loops back to the begining if the @lrcCursor reaches begining.
         { 
             lrcCursor = lrc.length - 1; 
-            if(lrc.charAt(lrcCursor) == '\n' || lrc.charAt(lrcCursor) == ' ') prevChar(); //avoid selecting EOF
+            if(lrc.charAt(lrcCursor) == '\n' || isSeparator(lrc.charAt(lrcCursor))) prevChar(); //avoid selecting EOF
             return false;
         }
         else //normal case
@@ -748,7 +758,7 @@ MuseScore
             //check if the next character is "\n" or white space, if it is, skip first
             if(prev <= lrc.length - 1) //check if index out of bound error first
             {
-                if(lrc.charAt(prev) == '\n' || lrc.charAt(prev) == ' ')
+                if(lrc.charAt(prev) == '\n' || isSeparator(lrc.charAt(prev)))
                 {
                     prevChar(); return false; //continously skip until no '\n' or whitespaces were found
                 }
@@ -757,23 +767,28 @@ MuseScore
         }
     }
 
-    //verticalIncrement and whitespaceIncrement indicate how many pixels of a line & a whitespace on user's deivce screen.
+    //verticalIncrement and separatorIncrement indicate how many pixels of a line & a whitespace (or other separators) on user's deivce screen.
     //use getVerticalIncrement() to forcefully resize the invisible lrcDisplayDummy and use its width to calculate the pixel increments.
     //This is a very cheesy solution but worked pretty well.
     property var verticalIncrement: 0;
-    property var whitespaceIncrement: 0;
+    property var separatorIncrement: [];
     property var newlinePositions: [0]; 
     property var newlineVerticalIncrements: [];
     function getVerticalIncrement() 
     { //use a list @newlinePositions to store all the position index of beigning of newlines in lrc
-        newlinePositions = [0]; 
+        newlinePositions = [0]; separatorIncrement = [];
         for(var i = 0; i < lrc.length; i++)
             if (lrc.charAt(i) == '\n') newlinePositions.push(i);
         lrcDisplayDummy.text = convertLineBreak("1");
         verticalIncrement = lrcDisplayDummy.height;
-        whitespaceIncrement = lrcDisplayDummy.width;
-        lrcDisplayDummy.text = convertLineBreak("1 ");
-        whitespaceIncrement = lrcDisplayDummy.width - whitespaceIncrement;
+        for(var i = 0; i < separator.length; i++)
+        {
+            lrcDisplayDummy.text = convertLineBreak("1");
+            var before = lrcDisplayDummy.width;
+            lrcDisplayDummy.text = convertLineBreak("1" + separator[i]);
+            separatorIncrement.push(lrcDisplayDummy.width - before);
+        }
+        console.log("separatorIncrement: " + separatorIncrement);
         //on MacOS, each lines' height is slightly different to each other depends on the text. So we use a list to track every line's pixel height.
         newlineVerticalIncrements = [];
         if(Qt.platform.os == "osx") 
@@ -817,10 +832,11 @@ MuseScore
             //THIS IS SUCH A DIRTY WORKAROUND
             //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap trailing whitespaces here:
             lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/\s+$/gm, ' '); 
+            if(lrcDisplayDummy.text.startsWith("<br />")) lrcDisplayDummy.text = lrcDisplayDummy.text.substring(6);
             //console.log("buffered text: " + lrcDisplayDummy.text)
             if(posX < lrcDisplayDummy.width) 
             {
-                if(txt.charAt(i) == ' ') //if user selects a whitespace, snap to the nearest character
+                if(isSeparator(txt.charAt(i))) //if user selects a whitespace, snap to the nearest character
                 {
                     //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
                     if(i == 0 || i == txt.length - 1) return -1; 
@@ -828,7 +844,7 @@ MuseScore
                     if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) {lrcCursor = i; nextChar(); return lrcCursor;}
                     if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) {lrcCursor = i; prevChar(); return lrcCursor;}
                     //snap to the nearest character (use prevChar() and nextChar() to also skip all the nearest whitespaces)
-                    if(posX - (lrcDisplayDummy.width - whitespaceIncrement) < lrcDisplayDummy.width - posX)
+                    if(posX - (lrcDisplayDummy.width - separatorIncrement[parseInt(isSeparator(txt.charAt(i)))]) < lrcDisplayDummy.width - posX)
                         {lrcCursor = i; prevChar(); return lrcCursor;}
                     else
                         {lrcCursor = i; nextChar(); return lrcCursor;}
@@ -1035,11 +1051,11 @@ MuseScore
                             }
                             CheckBox { 
                                 id: replaceModeCheckBox
-                                checked: replaceMode 
+                                checked: true;
                                 text: qsTr("Replace Mode:\noverwrites existed lyrics")}
                             CheckBox { 
                                 id: previewSoundModeCheckBox
-                                checked: previewSoundMode 
+                                checked: true;
                                 text: qsTr("🔊Preview Note Sounds")}
                             Text 
                             { 
@@ -1049,7 +1065,7 @@ MuseScore
                             SpinBox{
                                 id: maximumUndoStepsSpinBox
                                 from: 10
-                                value: maximumUndoSteps
+                                value: 50
                                 to: 100
                                 stepSize: 5
                                 validator: IntValidator {
@@ -1063,9 +1079,6 @@ MuseScore
                                 width: syllableButton*0.5
                                 height: syllableButton*0.5
                                 onClicked: { 
-                                    replaceMode = replaceModeCheckBox.checked;
-                                    previewSoundMode = previewSoundModeCheckBox.checked;
-                                    maximumUndoSteps = maximumUndoStepsSpinBox.value;
                                     settingsPopup.close(); 
                                     console.log("replaceMode: " + replaceMode);
                                     console.log("previewSoundMode: " + previewSoundMode);
@@ -1182,6 +1195,19 @@ MuseScore
                     }
                 }
             }
+            Popup 
+            {
+                id: hyphenationProcessing
+                closePolicy: Popup.NoAutoClose
+                x: parent.x + 10
+                y: parent.y + 5
+                height: lrcDisplay.height > lrcDisplayScrollView.height ? lrcDisplayScrollView.height - 10 : lrcDisplay.height - 10
+                width: lrcDisplayScrollView.width - 20
+                modal: true
+                focus: true
+                background: Rectangle { anchors.fill: parent; color: "lightgray"; border.color: "lightgray"; opacity: 0.85;}
+                Text { id: hyphenationProcessingText; anchors.centerIn: parent; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter;}
+            }
         }
 
         Text
@@ -1249,13 +1275,104 @@ MuseScore
             leftPadding: 3
             topPadding: 3
             rightPadding: 3
-            MenuItem { text: "Copy to Clip Board"}
             MenuItem { text: "Edit Lyrics"}
+            MenuItem 
+            { 
+                id: hyphenatedModeToggle
+                checkable: false; checked: checkable;
+                enabled: inputButtons.enabled;
+                text: qsTr("Hyphenated Mode: ") + (checkable ? "On" : "Off"); 
+                onTriggered: checkable = !checkable;
+            }
             MenuSeparator { }
+            MenuItem 
+            { 
+                id: hyphenation
+                text: qsTr("English Hyphenation\n(requires Internet connection)")
+                enabled: inputButtons.enabled
+                function parseResponse(html)
+                {
+                    var start = html.indexOf("name=\"inputText\""); if(start == -1) return false;
+                    var end = html.lastIndexOf("/textarea"); if(end == -1 || end < start) return false;
+                    for(var i = start; i < html.length; i++) if(html.charAt(i) == '>') {start = i + 1; break;}
+                    for(var i = end; i > start; i--) if(html.charAt(i) == '<') {end = i; break;}
+                    if(end < start) return false;
+                    return html.substring(start, end);
+                }
+                Timer // in case of hypenation failed due to poor connection or whatever, prompt failed message
+                {   
+                    id: hyphenationDelayCloseMsg
+                    repeat: false
+                    interval: 1000
+                    onTriggered: {hyphenationProcessing.close(); releaseUI();}
+                }
+                Timer // in case of request out time, prompt failed message
+                {   
+                    id: hyphenationReqTimedOutMsg
+                    repeat: false
+                    interval: 10000
+                    onTriggered: { 
+                        hyphenation.request.abort();
+                        hyphenationProcessingText.text = qsTr("❌ Request timed out"); 
+                        hyphenationDelayCloseMsg.start();
+                    }
+                }
+                property var request: new XMLHttpRequest();
+                onTriggered:
+                {
+                    var content = "inputText=" + encodeURIComponent(lrc);
+                    console.log("request : " + content);
+                    hyphenation.request = new XMLHttpRequest();
+                    hyphenationProcessing.open();
+                    hyphenationProcessingText.text = qsTr("Hyphenating Lyrics...\nSending Request to juiciobrennan.com/syllables/...");
+                    suspendUI();
+                    hyphenationReqTimedOutMsg.start();
+                    hyphenation.request.onreadystatechange = function() 
+                    {
+                        if (hyphenation.request.readyState == XMLHttpRequest.DONE) 
+                        {
+                            hyphenationReqTimedOutMsg.stop();
+                            var response = hyphenation.request.response;
+                            if(!response)
+                            {
+                                hyphenationProcessingText.text = qsTr("❌ Connection Failed");
+                                hyphenationDelayCloseMsg.start();
+                                return;
+                            }
+                            console.log("response : " + hyphenation.parseResponse(response));
+                            separator = [' ', '-'];
+                            acceptLyrics(hyphenation.parseResponse(response)); inputButtons.enabled = false; //avoid misclicking before popup's gone
+                            hyphenationProcessingText.text = qsTr("✔ Hyphenation Completed!");
+                            hyphenationDelayCloseMsg.start();
+                        }
+                    }
+                    hyphenation.request.open("POST", "https://www.juiciobrennan.com/syllables/", true);
+                    hyphenation.request.setRequestHeader("content-type", "application/x-www-form-urlencoded");
+                    hyphenation.request.send(content);
+                }
+            }
             MenuItem { text: "Japanese Kanji to Furigana\n(requires Internet connection)"}
-            MenuItem { text: "English Hyphenation\n(requires Internet connection)"}
         }
     }
+
+    function suspendUI()
+    {
+        lrcDisplayMenuMouseArea.enabled = false;
+        inputButtons.enabled = false;
+        buttonOpenFile.enabled = false;
+        autoReadLyricsMouseArea.enabled = false
+        lrcDisplayMouseArea.enabled = false;
+    }
+    function releaseUI()
+    {
+        lrcDisplayMenuMouseArea.enabled = true;
+        inputButtons.enabled = true;
+        buttonOpenFile.enabled = true;
+        autoReadLyricsMouseArea.enabled =true;
+        lrcDisplayMouseArea.enabled = true;
+    }
+
+    //Button{id: testBTN; text: "test!"; onClicked: {} }
 
     Shortcut //addSyllable() shortcut
     {
