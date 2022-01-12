@@ -12,96 +12,128 @@ by Snake4y5h</source>
 by Snake4y5h</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="68"/>
         <source>Current File:</source>
-        <translation>当前歌词：</translation>
+        <translation type="vanished">当前歌词：</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="52"/>
+        <location filename="../lyricsHelper.qml" line="57"/>
         <source>Please choose a .txt or .lrc file</source>
         <translation>请选择一个.txt文件</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="98"/>
+        <location filename="../lyricsHelper.qml" line="73"/>
+        <source>Current File: </source>
+        <translation>当前歌词：</translation>
+    </message>
+    <message>
+        <location filename="../lyricsHelper.qml" line="109"/>
         <source>Auto Loading Lyrics...</source>
         <translation>自动搜寻歌词文件中...</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="116"/>
+        <location filename="../lyricsHelper.qml" line="129"/>
         <source>Couldn&apos;t find any .txt file contains
 the Current Score&apos;s name in the same path.</source>
         <translation>没有在当前乐谱目录下
 找到带有当前乐谱名字的.txt文件.</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="942"/>
-        <location filename="../lyricsHelper.qml" line="957"/>
+        <location filename="../lyricsHelper.qml" line="974"/>
+        <location filename="../lyricsHelper.qml" line="992"/>
         <source>Click &quot;...&quot; to open a .txt file→</source>
         <translation>先点这儿打开一个歌词文件→</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="970"/>
+        <location filename="../lyricsHelper.qml" line="1005"/>
         <source>Tips：Right Click &quot;...&quot; to open Plugin Settings⚙</source>
         <translation>提示：鼠标右键点击&quot;...&quot;可以打开插件设置⚙</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="995"/>
-        <source>This is not a text for translation but just a notice: you may also need to change settingsPopup.width to adapt to your language&apos;s text space.</source>
-        <extracomment>Please check settingsPopup.width at this message&apos;s line in lyricsHelper.qml. You will find a switch() then add your language&apos;s case.</extracomment>
-        <translation></translation>
-    </message>
-    <message>
-        <location filename="../lyricsHelper.qml" line="1023"/>
+        <location filename="../lyricsHelper.qml" line="1050"/>
         <source>&lt;b style=&quot;font-size:8vw&quot;&gt;⚙ Plugin Settings:&lt;/b&gt;</source>
         <translation>&lt;b style=&quot;font-size:8vw&quot;&gt;⚙ 插件设置 Settings：&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1028"/>
+        <location filename="../lyricsHelper.qml" line="1055"/>
         <source>Replace Mode:
 overwrites existed lyrics</source>
         <translation>替换模式:
 如已有歌词则覆盖</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1032"/>
+        <location filename="../lyricsHelper.qml" line="1059"/>
         <source>🔊Preview Note Sounds</source>
         <translation>🔊预览音符声音</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1036"/>
+        <location filename="../lyricsHelper.qml" line="1063"/>
         <source>Maximum Undo Steps:</source>
         <translation>最大撤销步数：</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1051"/>
+        <location filename="../lyricsHelper.qml" line="1078"/>
         <source>OK</source>
         <translation>OK</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1098"/>
+        <location filename="../lyricsHelper.qml" line="1124"/>
         <source>Add
 Syllable</source>
         <translation>单音
 Syllable</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1107"/>
+        <location filename="../lyricsHelper.qml" line="1133"/>
         <source>Extend
 Melisma</source>
         <translation>转音
 Melisma</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1116"/>
+        <location filename="../lyricsHelper.qml" line="1142"/>
         <source>Concatenate
 Synalepha</source>
         <translation>多音
 Synalepha</translation>
     </message>
     <message>
-        <location filename="../lyricsHelper.qml" line="1144"/>
+        <location filename="../lyricsHelper.qml" line="1172"/>
         <source>Please load a lyrics file first</source>
         <translation>请先选择一个歌词文件</translation>
+    </message>
+    <message>
+        <location filename="../lyricsHelper.qml" line="1284"/>
+        <source>Hyphenated Mode: </source>
+        <translation>英文分词模式：</translation>
+    </message>
+    <message>
+        <location filename="../lyricsHelper.qml" line="1291"/>
+        <source>English Hyphenation
+(requires Internet connection)</source>
+        <translation>英文歌词音节分离
+（需要联网）</translation>
+    </message>
+    <message>
+        <location filename="../lyricsHelper.qml" line="1316"/>
+        <source>❌ Request timed out</source>
+        <translation>❌ 请求超时</translation>
+    </message>
+    <message>
+        <location filename="../lyricsHelper.qml" line="1327"/>
+        <source>Hyphenating Lyrics...
+Sending Request to juiciobrennan.com/syllables/...</source>
+        <translation>正在进行单词音节分离...
+向juiciobrennan.com/syllables/服务器发送请求中...</translation>
+    </message>
+    <message>
+        <location filename="../lyricsHelper.qml" line="1338"/>
+        <source>❌ Connection Failed</source>
+        <translation>❌ 联网失败</translation>
+    </message>
+    <message>
+        <location filename="../lyricsHelper.qml" line="1345"/>
+        <source>✔ Hyphenation Completed!</source>
+        <translation>✔ 音节分离完成！</translation>
     </message>
 </context>
 </TS>
