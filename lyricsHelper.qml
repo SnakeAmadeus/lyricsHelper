@@ -1265,11 +1265,13 @@ MuseScore
             lrcDisplayMenu.open();
         }
         property var wheelIncrement: 0;
+        property var maxPointSize: (Qt.platform.os == "osx") ? 17 : 12;
+        property var minPointSize: (Qt.platform.os == "osx") ? 14 : 9;
         onWheel:
         { //Ctrl + Mouse Scroll to zoom in&out the lyrics display
             if ((wheel.modifiers & Qt.ControlModifier) && inputButtons.enabled)
             {
-                if((lrcDisplay.font.pointSize < 12 || wheel.angleDelta.y < 0) && (lrcDisplay.font.pointSize > 8 || wheel.angleDelta.y > 0))
+                if((lrcDisplay.font.pointSize < maxPointSize || wheel.angleDelta.y < 0) && (lrcDisplay.font.pointSize > minPointSize || wheel.angleDelta.y > 0))
                 {
                      wheelIncrement += (wheel.angleDelta.y / 360); //makes mouse scorlling 3 steps as the minimum unit
                      if(Math.floor(wheelIncrement) >= 1 || Math.ceil(wheelIncrement) <= -1)
