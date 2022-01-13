@@ -14,7 +14,6 @@ import QtQml 2.2
 import MuseScore 3.0
 import FileIO 3.0
 import Qt.labs.folderlistmodel 2.2
-import QtQuick.XmlListModel 2.0
 import "zparkingb/selectionhelper.js" as SelHelper
 
 MuseScore 
@@ -73,6 +72,8 @@ MuseScore
             lyricSource.text = qsTr("Current File: ") + myFileLyrics.source.slice(8); //trim path name for better view
             lyricSource.horizontalAlignment = Text.AlignLeft;
             acceptLyrics(myFileLyrics.read());
+            //for japaneseToKana backup its before converting lyrics
+            if(japaneseToKana.hasJapanese(lrc)) japaneseToKana.lrcBackup = lrc;
         }
     }
     function acceptLyrics(text)
@@ -81,7 +82,12 @@ MuseScore
         lrcDisplay.text = text; //update lyrics text to displayer
         lrcCursor = 0; //reset @lrcCursor
         inputButtons.enabled = true; //recover input buttons' availability
-        updateDisplay();
+        updateDisplay(); 
+        //check the language of lyrics, see if they are convertable in specific language.
+        hyphenation.enabled = hyphenation.hasLatinAlphabet(lrc);
+        hyphenation.text = hyphenation.enabled ? hyphenation.deafultText : hyphenation.langNotFoundText;
+        japaneseToKana.enabled = japaneseToKana.hasJapanese(lrc);
+        japaneseToKana.text = japaneseToKana.enabled ? japaneseToKana.deafultText : japaneseToKana.langNotFoundText;
         //resize the pannel
         controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
         lrcDisplayScrollView.height = inputButtons.height * 8
@@ -1197,7 +1203,7 @@ MuseScore
             }
             Popup 
             {
-                id: hyphenationProcessing
+                id: contentReqPopup
                 closePolicy: Popup.NoAutoClose
                 x: parent.x + 10
                 y: parent.y + 5
@@ -1206,7 +1212,25 @@ MuseScore
                 modal: true
                 focus: true
                 background: Rectangle { anchors.fill: parent; color: "lightgray"; border.color: "lightgray"; opacity: 0.85;}
-                Text { id: hyphenationProcessingText; anchors.centerIn: parent; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter;}
+                Text { id: contentReqPopupText; anchors.centerIn: parent; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter;}
+            }
+            Timer // in case of content quest failed due to poor connection or whatever, prompt failed message
+            {   
+                id: contentReqDelayMsg
+                repeat: false
+                interval: 1000
+                onTriggered: {contentReqPopup.close(); releaseUI();}
+            }
+            Timer // in case of content quest out time, prompt failed message
+            {   
+                id: contentReqTimeOutMsg
+                repeat: false
+                interval: 10000
+                onTriggered: { 
+                    hyphenation.request.abort();
+                    contentReqPopupText.text = qsTr("❌ Request timed out"); 
+                    contentReqDelayMsg.start();
+                }
             }
         }
 
@@ -1275,7 +1299,7 @@ MuseScore
             leftPadding: 3
             topPadding: 3
             rightPadding: 3
-            MenuItem { text: "Edit Lyrics"}
+            MenuItem { id: editLyrics; text: "Edit Lyrics";}
             MenuItem 
             { 
                 id: hyphenatedModeToggle
@@ -1288,8 +1312,13 @@ MuseScore
             MenuItem 
             { 
                 id: hyphenation
-                text: qsTr("English Hyphenation\n(requires Internet connection)")
+                property var deafultText: qsTr("English Hyphenation\n(requires Internet connection)")
+                property var langNotFoundText: qsTr("English Hyphenation\n(No English Detected)")
+                text: deafultText
                 enabled: inputButtons.enabled
+                //latin alphabet regexp from stackoverflow.com/questions/7258375/latin-charcters-included-in-javascript-regex
+                property var latin_regexp: /[A-z\u00C0-\u00ff]+/g;
+                function hasLatinAlphabet(s) {return latin_regexp.test(s);} 
                 function parseResponse(html)
                 {
                     var start = html.indexOf("name=\"inputText\""); if(start == -1) return false;
@@ -1299,51 +1328,33 @@ MuseScore
                     if(end < start) return false;
                     return html.substring(start, end);
                 }
-                Timer // in case of hypenation failed due to poor connection or whatever, prompt failed message
-                {   
-                    id: hyphenationDelayCloseMsg
-                    repeat: false
-                    interval: 1000
-                    onTriggered: {hyphenationProcessing.close(); releaseUI();}
-                }
-                Timer // in case of request out time, prompt failed message
-                {   
-                    id: hyphenationReqTimedOutMsg
-                    repeat: false
-                    interval: 10000
-                    onTriggered: { 
-                        hyphenation.request.abort();
-                        hyphenationProcessingText.text = qsTr("❌ Request timed out"); 
-                        hyphenationDelayCloseMsg.start();
-                    }
-                }
                 property var request: new XMLHttpRequest();
                 onTriggered:
                 {
                     var content = "inputText=" + encodeURIComponent(lrc);
                     console.log("request : " + content);
                     hyphenation.request = new XMLHttpRequest();
-                    hyphenationProcessing.open();
-                    hyphenationProcessingText.text = qsTr("Hyphenating Lyrics...\nSending Request to juiciobrennan.com/syllables/...");
+                    contentReqPopup.open();
+                    contentReqPopupText.text = qsTr("Hyphenating Lyrics...\nSending Request to juiciobrennan.com/syllables/...");
                     suspendUI();
-                    hyphenationReqTimedOutMsg.start();
+                    contentReqTimeOutMsg.start();
                     hyphenation.request.onreadystatechange = function() 
                     {
                         if (hyphenation.request.readyState == XMLHttpRequest.DONE) 
                         {
-                            hyphenationReqTimedOutMsg.stop();
+                            contentReqTimeOutMsg.stop();
                             var response = hyphenation.request.response;
                             if(!response)
                             {
-                                hyphenationProcessingText.text = qsTr("❌ Connection Failed");
-                                hyphenationDelayCloseMsg.start();
+                                contentReqPopupText.text = qsTr("❌ Connection Failed");
+                                contentReqDelayMsg.start();
                                 return;
                             }
                             console.log("response : " + hyphenation.parseResponse(response));
                             separator = [' ', '-'];
                             acceptLyrics(hyphenation.parseResponse(response)); inputButtons.enabled = false; //avoid misclicking before popup's gone
-                            hyphenationProcessingText.text = qsTr("✔ Hyphenation Completed!");
-                            hyphenationDelayCloseMsg.start();
+                            contentReqPopupText.text = qsTr("✔ Hyphenation Completed!");
+                            contentReqDelayMsg.start();
                         }
                     }
                     hyphenation.request.open("POST", "https://www.juiciobrennan.com/syllables/", true);
@@ -1351,10 +1362,80 @@ MuseScore
                     hyphenation.request.send(content);
                 }
             }
-            MenuItem { text: "Japanese Kanji to Furigana\n(requires Internet connection)"}
+            MenuItem 
+            { 
+                id: japaneseToKana
+                property var deafultText: qsTr("Japanese Kanji to Kana ▶\n(requires Internet connection)")
+                property var langNotFoundText: qsTr("Japanese Kanji to Kana ▶\n(No Japanese Detected)")
+                text: deafultText
+                //japanese regex from https://stackoverflow.com/questions/15033196/using-javascript-to-check-whether-a-string-contains-japanese-characters-includi
+                property var jp_regexp: /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+/g;
+                function hasJapanese(s) {return jp_regexp.test(s);}
+                function parseResponse(response) {return JSON.parse(response).result;}
+                property var request: new XMLHttpRequest();
+                function convertJapaneseTo(to)
+                {
+                    var content = "{\"str\": \"" + lrc.replace(/\n/g, "\\n") + "\",\"to\": \"" + to + "\", \"mode\": \"normal\",\"romajiSystem\": \"nippon\"}";
+                    console.log("request : " + content);
+                    japaneseToKana.request = new XMLHttpRequest();
+                    contentReqPopup.open();
+                    contentReqPopupText.text = qsTr("Converting Kanjis to Kana\nSending Request https://api.kuroshiro.org/convert...");
+                    suspendUI();
+                    contentReqTimeOutMsg.start();
+                    japaneseToKana.request.onreadystatechange = function() 
+                    {
+                        if (japaneseToKana.request.readyState == XMLHttpRequest.DONE) 
+                        {
+                            contentReqTimeOutMsg.stop();
+                            var response = japaneseToKana.request.response;
+                            if(!response)
+                            {
+                                contentReqPopupText.text = qsTr("❌ Connection Failed");
+                                contentReqDelayMsg.start();
+                                return;
+                            }
+                            console.log("response: " + response);
+                            separator = [' '];
+                            acceptLyrics(japaneseToKana.parseResponse(response)); inputButtons.enabled = false; //avoid misclicking before popup's gone
+                            revertJPconv.enabled = true;
+                            contentReqPopupText.text = qsTr("✔ Convertion Completed!");
+                            contentReqDelayMsg.start();
+                        }
+                    }
+                    japaneseToKana.request.open("POST", "https://api.kuroshiro.org/convert", true);
+                    japaneseToKana.request.setRequestHeader("content-type", "application/json; charset=UTF-8");
+                    japaneseToKana.request.send(content);
+                }
+                property var lrcBackup: "";
+                Menu
+                {
+                    id: japaneseToKanaModeMenu
+                    scale: lrcDisplayMenu.scale
+                    spacing: lrcDisplayMenu.spacing
+                    bottomPadding: lrcDisplayMenu.bottomPadding
+                    leftPadding:lrcDisplayMenu.leftPadding
+                    topPadding: lrcDisplayMenu.topPadding
+                    rightPadding: lrcDisplayMenu.rightPadding
+                    MenuItem { text: qsTr("to Hiragana あ"); onTriggered:{japaneseToKana.convertJapaneseTo("hiragana");}}
+                    MenuItem { text: qsTr("to Katakana ア"); onTriggered:{japaneseToKana.convertJapaneseTo("katakana");}}
+                    MenuSeparator { }
+                    MenuItem { id: revertJPconv; text: qsTr("Revert Conversion"); enabled: false; 
+                               onTriggered:{acceptLyrics(japaneseToKana.lrcBackup); revertJPconv.enabled = false;}}
+                }
+                onTriggered:
+                {
+                    japaneseToKanaModeMenu.x = editLyrics.x; japaneseToKanaModeMenu.y = editLyrics.y;
+                    japaneseToKanaModeMenu.open();
+                } 
+            }
         }
     }
 
+    //Button{id: testBTN; text: "test!"; onClicked: {console.log(japaneseToKana.hasJapanese(lrc));} }
+
+    //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
+    //such as English Hyphenation and Japanese Kanji to Kana
+    //Why tf QML doesn't support JS's function default value syntax?
     function suspendUI()
     {
         lrcDisplayMenuMouseArea.enabled = false;
@@ -1372,8 +1453,6 @@ MuseScore
         lrcDisplayMouseArea.enabled = true;
     }
 
-    //Button{id: testBTN; text: "test!"; onClicked: {} }
-
     Shortcut //addSyllable() shortcut
     {
         id: syllableButtonShortcut
@@ -1383,7 +1462,6 @@ MuseScore
             addSyllable(getSelectedCursor());
         }
     }
-
     Shortcut //addMelisma() shortcut
     {
         id: melismaButtonShortcut
@@ -1393,7 +1471,6 @@ MuseScore
             addMelisma(getSelectedCursor());
         }
     }
-
     Shortcut //addSynalepha() shortcut
     {
         id: synalephaButtonShortcut
@@ -1403,7 +1480,6 @@ MuseScore
             addSynalepha(getSelectedCursor());
         }
     }
-
     Shortcut //autoLoadLyrics() shortcut
     {
         id: autoChangeLyrics
