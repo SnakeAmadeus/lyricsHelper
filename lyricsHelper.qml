@@ -35,7 +35,11 @@ MuseScore
     property alias maximumUndoSteps: maximumUndoStepsSpinBox.value;
 
     property var lrc: String("");
-    property var lrcCursor: 0;
+    property var lrcCursor: [0];
+    //helper toString() function for @lrcCursor
+    function lrcCursorToString(c) {if(c.length == 1) return c[0]; else return c[0] + "-" + c[1];}
+    //helper parse() function that parses the string format of toString()
+    function lrcCursorParse(c) {if(c.split('-').length == 1) return c.parseInt(); else return [c.split('-')[0].parseInt(),c.split('-')[1].parseInt()];}
 
     //@hyphenatedMode decides whether the single unit of lyrics selection is between whitespaces or (whitespaces and hyphens.) default = false
     property alias hyphenatedMode: hyphenatedModeToggle.checked;
@@ -80,7 +84,7 @@ MuseScore
     {
         lrc = text;
         lrcDisplay.text = text; //update lyrics text to displayer
-        lrcCursor = 0; //reset @lrcCursor
+        if(lrcCursor.length == 1) lrcCursor = [0]; else {lrcCursor = [0,1]; expandCharToWord(0);}//reset @lrcCursor
         inputButtons.enabled = true; //recover input buttons' availability
         updateDisplay(); 
         //check the language of lyrics, see if they are convertable in specific language.
@@ -123,7 +127,7 @@ MuseScore
     FolderListModel //FolderListModel assists autoLoadLyrics() to search .txt files in the specified folder
     {
         id: searchTxtFolderListModel
-        property var tempLrcCursor : 0
+        property var tempLrcCursor : [];
         function searchTxt()
         {
             tempLrcCursor = lrcCursor;
@@ -280,6 +284,10 @@ MuseScore
        return cursor;
     }
 
+    //helper function that returns a string of currently selected lyrics
+    function getSelectedLyric() {if(lrcCursor.length == 1) return lrc.charAt(lrcCursor[0]); else return lrc.substring(lrcCursor[0],lrcCursor[1]);}
+
+    //core function for the "Add Syllable" button
     function addSyllable(cursor)
     {
        //fill in the lyrics
@@ -300,13 +308,14 @@ MuseScore
                 }
                 else //if no lyrics on the current note, add it but no future cursor is forwarded.
                 {
-                    var character = lrc.charAt(lrcCursor);
+                    var character = getSelectedLyric();
                     var fill = newElement(Element.LYRICS);
                     fill.text = character;
                     fill.voice = cursor.voice;
                     curScore.startCmd();
                         console.log("addSyllable(): current character = " + fill.text);
                         cursor.element.add(fill);
+                        addHyphen(cursor);
                         pushToUndoStack(cursor, "addSyllable()");
                     curScore.endCmd();
                     nextChar();
@@ -316,7 +325,7 @@ MuseScore
             }
             //if probing cursor passed the check, proceed to the main body of the function
             var cursor = getSelectedCursor(); //if no EOF are found, override the probing cursor with the normal cursor
-            var character = lrc.charAt(lrcCursor);
+            var character = getSelectedLyric();
             var fill = newElement(Element.LYRICS);
             fill.text = character;
             fill.voice = cursor.voice;
@@ -364,6 +373,7 @@ MuseScore
                     cursor = getSelectedCursor();
                 }
                 cursor.element.add(fill);
+                addHyphen(cursor);
                 pushToUndoStack(cursor, "addSyllable()")
                 cursor.next();
                 console.log("addSyllable(): Next Selection is " + nextCursor.element.type);
@@ -435,6 +445,7 @@ MuseScore
        }
     }
 
+    //core function for the "Extend Melisma" button
     function addMelisma(cursor)
     {
         if(cursor)
@@ -546,12 +557,13 @@ MuseScore
         }
     }
 
+    //core function for the "Concatenate Synalepha" button
     function addSynalepha(cursor)
     {
         if (cursor) 
         {
             var tempTick = cursor.tick;
-            var character = lrc.charAt(lrcCursor);
+            var character = getSelectedLyric();
             //if current notes has lyrics already, concatenate the character to the original one right away.
             if(cursor.element.lyrics.length == 1)
             {
@@ -665,6 +677,35 @@ MuseScore
         }
     }
 
+    //core function for "hyphenated mode". The way that MuseScore's lyrics hyphens work is by the element.lyrics[0].syllabic property.
+    //start syllable of a hyphenated word, syllabic = 1
+    //middle syllable of a hyphenated word, syllabic = 3
+    //end syllable of a hyphenated word, syllabic = 2
+    //for example, the word Sep-tem-ber, the syllabic number of "Sep" will be 1, "tem" will be 3, "ber" will be 2
+    function addHyphen(cursor)
+    {
+        function findhyphenationNum()
+        {
+            if(lrcCursor[1] >= lrc.length - 1) return 0;
+            if(lrcCursor[0] == 0)
+            {
+                if(lrc.charAt(lrcCursor[1]) == '-') return 1;
+                else return 0;
+            } 
+            var leftBound = lrc.charAt(lrcCursor[0] - 1);
+            var rightBound = lrc.charAt(lrcCursor[1]);
+            if(((leftBound == ' ') || (leftBound == '\n')) && (rightBound == '-')) return 1;
+            if((leftBound == '-') && (rightBound == '-')) return 3;
+            if((leftBound == '-') && ((rightBound == ' ') || (rightBound == '\n'))) return 2;
+            return 0;
+        }
+        if((lrcCursor.length == 2) && cursor)
+        {
+            var hyphenationNum = findhyphenationNum();
+            cursor.element.lyrics[0].syllabic = hyphenationNum;
+        }
+    }
+
     //helper function, check if a note is inside a melisma line
     function isInsideMelismaLine(cursor)
     {
@@ -680,26 +721,6 @@ MuseScore
         if(melismaLength == 0) return false;
         if(melismaLength < checkLength) return false;
         return true;
-    }
-
-    function durationTo64(duration) { return 64 * duration.numerator / duration.denominator;} //helper function for converting duration to 64 for addMelisma()
-
-    function convertLineBreak(x) { return x.replace(/\n/g, "<br />"); } //special thanks to @Jack-Works for wrapping linebreaks in HTML
-
-    function updateDisplay() //update display to lrcDisplay.text
-    {
-        if(lrcCursor == 0)
-        {
-            lrcDisplay.text = convertLineBreak("<b>" + lrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + lrc.slice(1) + "</font>");
-        }
-        else if(lrcCursor == lrc.length - 1)
-        {
-            lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, lrcCursor) + "</font>" + "<b>" + lrc.slice(lrcCursor) + "</b>");
-        }
-        else
-        {
-             lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor) + "</font>" + "<b>" + lrc.slice(lrcCursor, lrcCursor + 1) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor + 1) + "</font>");
-        }
     }
 
     function playCursor(cursor) //plays the note's sound at cursor, Special Thanks to Sammik's idea of using cmd("prev-chord") & cmd("next-chord") as workarounds : https://musescore.org/en/node/327715
@@ -725,52 +746,94 @@ MuseScore
         return;
     }
 
-    function nextChar() //advancing the @lrcCursor forward by a char
+    function durationTo64(duration) { return 64 * duration.numerator / duration.denominator;} //helper function for converting duration to 64 for addMelisma()
+
+    function convertLineBreak(x) { return x.replace(/\n/g, "<br />"); } //special thanks to @Jack-Works for wrapping linebreaks in HTML
+
+    function updateDisplay() //update display to lrcDisplay.text
     {
-        var next = lrcCursor + 1;
-        if(next >= lrc.length) //loops back to the begining if the @lrcCursor reaches EOF.
-        { 
-            lrcCursor = 0; 
-            if(lrc.charAt(lrcCursor) == '\n' || isSeparator(lrc.charAt(lrcCursor))) nextChar();
-            return false;
-        }
-        else //normal case
+        if(lrcCursor.length == 1) //if the selected text is single char (normal case)
         {
-            lrcCursor = next;
-            //check if the next character is "\n" or white space, if it is, skip first
-            if(next <= lrc.length - 1) //check if index out of bound error first
+            if(lrcCursor[0] == 0)
             {
-                if(lrc.charAt(next) == '\n' || isSeparator(lrc.charAt(next)))
-                {
-                    nextChar(); return false; //continously skip until no '\n' or whitespaces were found
-                }
+                lrcDisplay.text = convertLineBreak("<b>" + lrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + lrc.slice(1) + "</font>");
             }
-            else return true;
+            else if(lrcCursor[0] == lrc.length - 1)
+            {
+                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0]) + "</b>");
+            }
+            else
+            {
+                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0], lrcCursor[0] + 1) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[0] + 1) + "</font>");
+            }
+        }
+        else if(lrcCursor.length == 2) //if the selected text is more than one char (like in hyphenated mode)
+        {
+            if(lrcCursor[1] == 1)
+            {
+                lrcDisplay.text = convertLineBreak("<b>" + lrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[1]) + "</font>");
+            }
+            else if(lrcCursor[1] >= lrc.length - 1)
+            {
+                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0]) + "</b>");
+            }
+            else
+            {
+                if(lrcCursor[0] == lrcCursor[1])
+                    lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + lrc.charAt(lrcCursor[0]) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[1]) + "</font>");
+                else
+                    lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0], lrcCursor[1]) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[1]) + "</font>");
+            }
         }
     }
 
-    function prevChar() //stepping the @lrcCursor back by a char, same structure as the nextChar() above
+    //Basic Lyrics Selection Functions:
+    function isOnlyContainsSeparator(text) //helper function that checks if the lyrics only contains '\n', whitespace or separators to avoid infinate loop
     {
-        var prev = lrcCursor - 1;
-        if(prev < 0) //loops back to the begining if the @lrcCursor reaches begining.
-        { 
-            lrcCursor = lrc.length - 1; 
-            if(lrc.charAt(lrcCursor) == '\n' || isSeparator(lrc.charAt(lrcCursor))) prevChar(); //avoid selecting EOF
-            return false;
-        }
-        else //normal case
+        function replaceAll(str, find, replace) { //unfortunately MS's qml doesn't support str.replaceAll(), so copied an alternative from https://stackoverflow.com/a/1144788
+            return str.replace(new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replace);}
+        var check = text; replaceAll(check, '\n', '');
+        for(var i = 0; i < separator.length; i++) {replaceAll(check, separator[i], '');}
+        return (check.length == 0);
+    }
+    function getNextAvailableCharPos(pos, direction) //from the @lrcCursor, searching the position of next non-'\n',-whitespace, or -separator char in the lyrics
+    {
+        if(!isOnlyContainsSeparator(lrc)) //assert if lyrics only contain \n and separators to avoid infinate loops
         {
-            lrcCursor = prev;
-            //check if the next character is "\n" or white space, if it is, skip first
-            if(prev <= lrc.length - 1) //check if index out of bound error first
+            for(var i = pos + direction; ; i += direction)
             {
-                if(lrc.charAt(prev) == '\n' || isSeparator(lrc.charAt(prev)))
-                {
-                    prevChar(); return false; //continously skip until no '\n' or whitespaces were found
-                }
+                if((direction == 1) && (i >= lrc.length)) i = 0;
+                if((direction == -1) && (i < 0)) i = lrc.length - 1;
+                if ((lrc.charAt(i)) == '\n' || isSeparator(lrc.charAt(i))) continue; else return i;
             }
-            else return true;
         }
+        else lrcDisplay.text = "your lyrics file only contains spaces or separators like \'-\'!" 
+    }
+    function getNextSeparatorPos(pos, direction) //from the @lrcCursor, searching the position of next '\n', whitespace, or separator in the lyrics
+    {
+        for(var i = pos + direction; ; i += direction)
+        {
+            if((direction == 1) && (i >= lrc.length)) return i;
+            if((direction == -1) && (i < 0)) return -1;
+            if((lrc.charAt(i)) != '\n' && !isSeparator(lrc.charAt(i))) continue; else return i;
+        }
+    }
+    function expandCharToWord(charPos) //selects the word that selected character belongs to
+    {
+        lrcCursor[0] = getNextSeparatorPos(charPos, -1) + 1;
+        lrcCursor[1] = getNextSeparatorPos(charPos, 1);
+    }
+    function nextChar() //advancing the @lrcCursor forward by skipping the @seperator to the next selection
+    {
+        if(lrcCursor.length == 1) lrcCursor[0] = getNextAvailableCharPos(lrcCursor[0], 1); //if the selected text is single char (normal case)
+        else if(lrcCursor.length == 2) //if the selected text is more than one char (like in hyphenated mode)
+            expandCharToWord(getNextAvailableCharPos(lrcCursor[1], 1));
+    }
+    function prevChar() //stepping the @lrcCursor back by a word or syllable, same structure as the nextChar() above
+    {
+        if(lrcCursor.length == 1) lrcCursor[0] = getNextAvailableCharPos(lrcCursor[0], -1); //if the selected text is single char (normal case)
+        else if(lrcCursor.length == 2) //if the selected text is more than one char (like in hyphenated mode)
+            expandCharToWord(getNextAvailableCharPos(lrcCursor[0], -1));
     }
 
     //verticalIncrement and separatorIncrement indicate how many pixels of a line & a whitespace (or other separators) on user's deivce screen.
@@ -847,13 +910,13 @@ MuseScore
                     //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
                     if(i == 0 || i == txt.length - 1) return -1; 
                     if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) == '\n' ) return -1;
-                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) {lrcCursor = i; nextChar(); return lrcCursor;}
-                    if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) {lrcCursor = i; prevChar(); return lrcCursor;}
+                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) return getNextAvailableCharPos(i, 1);
+                    if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) return getNextAvailableCharPos(i, -1);
                     //snap to the nearest character (use prevChar() and nextChar() to also skip all the nearest whitespaces)
                     if(posX - (lrcDisplayDummy.width - separatorIncrement[parseInt(isSeparator(txt.charAt(i)))]) < lrcDisplayDummy.width - posX)
-                        {lrcCursor = i; prevChar(); return lrcCursor;}
+                        return getNextAvailableCharPos(i, -1);
                     else
-                        {lrcCursor = i; nextChar(); return lrcCursor;}
+                        return getNextAvailableCharPos(i, 1);
                 }    
                 return i;
             }
@@ -908,8 +971,8 @@ MuseScore
                     var parse = top.split(':')
                     if(parse[0] == '彁')
                     {
-                        lrcCursor = parse[1].split('->')[0];
-                        console.log("Lyrics Selection history detected, roll lrcCursor back to " + lrcCursor);
+                        lrcCursor = lrcCursorParse(parse[1].split('->')[0]);
+                        console.log("Lyrics Selection history detected, roll lrcCursor back to " + lrcCursorToString(lrcCursor));
                         updateDisplay(); 
                         for (var i = 0; i < 3; i++) undo_stack.pop();
                         top = undo_stack.pop();
@@ -922,7 +985,7 @@ MuseScore
                 var cursor = getSelectedCursor();
                 var tempLrcCursor = lrcCursor;
                 prevChar(); //get last lrcCursor position but skip all the whitespaces and \n.
-                var current_lyrics = lrc.charAt(lrcCursor);
+                var current_lyrics = getSelectedLyric();
                 console.log("Snapshot note ticks = " + snapshot_note_ticks + ", " + "Current ticks: " + cursor.tick);
                 console.log("Snapshot lyrics = " + snapshot_lyrics + ", " + "Current lyrics: " + current_lyrics);
                 if(snapshot_type == "addSyllable()")
@@ -1121,7 +1184,7 @@ MuseScore
                     var original = lrcCursor;
                     prevChar();
                     updateDisplay();
-                    pushToUndoStack(false, "彁:" + original.toString() + "->" + lrcCursor.toString());
+                    pushToUndoStack(false, "彁:" + lrcCursorToString(original) + "->" + lrcCursorToString(lrcCursor));
                 }
             }
             Button 
@@ -1161,7 +1224,7 @@ MuseScore
                     var original = lrcCursor;
                     nextChar();
                     updateDisplay();
-                    pushToUndoStack(false, "彁:" + original.toString() + "->" + lrcCursor.toString());
+                    pushToUndoStack(false, "彁:" + lrcCursorToString(original) + "->" + lrcCursorToString(lrcCursor));
                 }
             }
         }
@@ -1189,12 +1252,13 @@ MuseScore
                         var found = findChar(mouse.x, mouse.y);
                         if(found != -1) 
                         {
-                            console.log("------Selected: " + lrc.charAt(found) + ", lrcCursor is at: " + found + "-----");
-                            lrcCursor = found;
+                            if(lrcCursor.length == 1) lrcCursor[0] = found;
+                            else if(lrcCursor.length == 2) expandCharToWord(found);
                             // Also push the lrcCursor change event to the undo_stack, so we can trace lrcCursor's position back
                             // placeholder "彁" is a very edgy Kanji (幽霊文字, Yuureimoji) that has totally unknown etymology 
                             // the choice is a tribute to LeaF's song 《彁》 https://www.youtube.com/watch?v=EsOU0V2kpUI
-                            pushToUndoStack(false, "彁:" + original.toString() + "->" + lrcCursor.toString())
+                            pushToUndoStack(false, "彁:" + lrcCursorToString(original) + "->" + lrcCursorToString(lrcCursor));
+                            console.log("------Selected: " + getSelectedLyric() + ", lrcCursor is at: " + lrcCursorToString(lrcCursor) + "-----");
                         }
                         else console.log("given position has no char!");
                         updateDisplay();
@@ -1302,15 +1366,25 @@ MuseScore
             topPadding: 3
             rightPadding: 3
             MenuItem { id: editLyrics; text: "Edit Lyrics";}
+            MenuSeparator { }
             MenuItem 
             { 
                 id: hyphenatedModeToggle
                 checkable: false; checked: checkable;
                 enabled: inputButtons.enabled;
                 text: qsTr("Hyphenated Mode: ") + (checkable ? "On" : "Off"); 
-                onTriggered: checkable = !checkable;
+                function toggleHyphenatedModeON() //this function can only turn the hyphenated mode ON
+                {
+                    if(!hyphenatedModeToggle.checkable)
+                    {
+                        separator = [' ', '-']; expandCharToWord(lrcCursor[0]);
+                        hyphenatedModeToggle.checkable = !hyphenatedModeToggle.checkable;
+                        updateDisplay();
+                    }
+                }
+                onTriggered: { if(!checkable) toggleHyphenatedModeON(); 
+                    else {checkable = false; separator = [' ']; lrcCursor = [lrcCursor[0]]; updateDisplay();}}
             }
-            MenuSeparator { }
             MenuItem 
             { 
                 id: hyphenation
@@ -1353,9 +1427,9 @@ MuseScore
                                 return;
                             }
                             console.log("response : " + hyphenation.parseResponse(response));
-                            separator = [' ', '-'];
                             acceptLyrics(hyphenation.parseResponse(response)); inputButtons.enabled = false; //avoid misclicking before popup's gone
                             contentReqPopupText.text = qsTr("✔ Hyphenation Completed!");
+                            hyphenatedModeToggle.toggleHyphenatedModeON();
                             contentReqDelayMsg.start();
                         }
                     }
@@ -1433,7 +1507,7 @@ MuseScore
         }
     }
 
-    //Button{id: testBTN; text: "test!"; onClicked: {console.log(japaneseToKana.hasJapanese(lrc));} }
+    //Button{id: testBTN; text: "test!"; onClicked: {} }
 
     //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
     //such as English Hyphenation and Japanese Kanji to Kana
