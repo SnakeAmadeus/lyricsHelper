@@ -1359,6 +1359,7 @@ MuseScore
                     anchors.fill: parent
                     border.color: "white"
                 }
+                textMargin: 0
                 Shortcut 
                 {
                     sequence: StandardKey.Copy
@@ -1400,7 +1401,6 @@ MuseScore
                 texteditButtons.enabled = false;
                 lrcDisplayScrollView.ScrollBar.vertical.position = pos;
                 releaseUI();
-                lrcEditScrollView.height = ((lrcEdit.height < (inputButtons.height*8)) ? lrcEdit.height : (inputButtons.height*8));
             }
             Button
             {   //"Cancel" buttons restores everything to its original states
@@ -1438,7 +1438,7 @@ MuseScore
                 onClicked: 
                 { 
                     var curPos = lrcEdit.cursorPosition;
-                    acceptLyrics(lrcEdit.text);  
+                    acceptLyrics(lrcEdit.text);
                     texteditButtons.enableLrcDisplay(); 
                     //when user finishes editing lyrics, move lrcCursor to approximately the edit cursor's position:
                     if(lrcCursor.length == 1) lrcCursor = [curPos]; 
@@ -1539,11 +1539,11 @@ MuseScore
                     lrcEditScrollView.enabled = true;
                     lrcEditBg.visible = true;
                     lrcEditScrollView.enabled = true;
-                    lrcEdit.focus = true;
                     lrcEdit.text = lrc;
                     lrcEdit.font.pointSize = lrcDisplay.font.pointSize;
                     lrcEditScrollView.ScrollBar.vertical.position = pos;
                     //sync the cursor position in lrcEdit with lrcCursor position in the lrcDisplay
+                    lrcEdit.forceActiveFocus();
                     if(lrcCursorBackup.length == 1) lrcEdit.cursorPosition = lrcCursorBackup[0] + 1;
                     else if(lrcCursorBackup.length == 2) lrcEdit.cursorPosition = lrcCursorBackup[1];
                     //give user the freedom to type lyrics when there is no lyrics loaded:
@@ -1724,7 +1724,7 @@ MuseScore
         }
     }
 
-    //Button{id: testBTN; text: "test!"; onClicked: {console.log()} }
+    //Button{id: testBTN; text: "test!"; onClicked: {console.log();} }
 
     //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
     //such as English Hyphenation and Japanese Kanji to Kana
