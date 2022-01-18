@@ -56,17 +56,35 @@ MuseScore
 
     FileDialog 
     {
-        id: fileDialog
+        id: openLrcDialog
         title: qsTr("Please choose a .txt or .lrc file")
         nameFilters: ["lyrics files (*.txt *.lrc)"]
         onAccepted: 
         {
-            var filename = fileDialog.fileUrl;
+            var filename = openLrcDialog.fileUrl;
             acceptFile(filename);
         }
     }
+
+    FileDialog 
+    {
+        id: lrcExportDialog
+        function saveFile(fileUrl, text)
+        {
+            var request = new XMLHttpRequest();
+            request.open("PUT", fileUrl, false);
+            request.send(text);
+            return request.status;
+        }
+        function getPath(fileUrl) {
+            for(var i = fileUrl.length - 1; i >= 0 ;i--) {if(fileUrl.charAt(i) == '/') return fileUrl.substring(0,i);}}
+        title: qsTr("Save As...")
+        nameFilters: ["lyrics files (*.txt *.lrc)"]
+        selectExisting: false
+        onAccepted: saveFile(lrcExportDialog.fileUrl, lrcEdit.text);
+    }
     
-    function acceptFile(filename) //helper function that reads a file for widget fileDialog and fileDrop
+    function acceptFile(filename) //helper function that reads a file for widget openLrcDialog and fileDrop
     {
         if(filename)
         {
@@ -85,16 +103,17 @@ MuseScore
         lrc = text;
         lrcDisplay.text = text; //update lyrics text to displayer
         if(lrcCursor.length == 1) lrcCursor = [0]; else {lrcCursor = [0,1]; expandCharToWord(0);}//reset @lrcCursor
+        prevChar(); nextChar(); //forcefully skip all the whitespaces in the file head.
         inputButtons.enabled = true; //recover input buttons' availability
         updateDisplay(); 
+        texteditButtons.enableLrcDisplay();
         //check the language of lyrics, see if they are convertable in specific language.
         hyphenation.enabled = hyphenation.hasLatinAlphabet(lrc);
         hyphenation.text = hyphenation.enabled ? hyphenation.deafultText : hyphenation.langNotFoundText;
         japaneseToKana.enabled = japaneseToKana.hasJapanese(lrc);
         japaneseToKana.text = japaneseToKana.enabled ? japaneseToKana.deafultText : japaneseToKana.langNotFoundText;
-        //resize the pannel
-        controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplay.height;
-        lrcDisplayScrollView.height = inputButtons.height * 8
+        //resize the panel
+        controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplayScrollView.height;
         getVerticalIncrement();
         undo_stack = [];
     }
@@ -752,6 +771,7 @@ MuseScore
 
     function updateDisplay() //update display to lrcDisplay.text
     {
+        if(isOnlyContainsSeparator()) {lrcDisplay.text = qsTr("Error: your lyrics file only contains whitespaces or separators like \'-\'!"); return false;}
         if(lrcCursor.length == 1) //if the selected text is single char (normal case)
         {
             if(lrcCursor[0] == 0)
@@ -788,30 +808,23 @@ MuseScore
     }
 
     //Basic Lyrics Selection Functions:
-    function isOnlyContainsSeparator(text) //helper function that checks if the lyrics only contains '\n', whitespace or separators to avoid infinate loop
+    function isOnlyContainsSeparator(text) //helper function to check if lyrics only contain \n and separators to avoid infinate loops
     {
-        function replaceAll(str, find, replace) { //unfortunately MS's qml doesn't support str.replaceAll(), so copied an alternative from https://stackoverflow.com/a/1144788
-            return str.replace(new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replace);}
-        var check = text; replaceAll(check, '\n', '');
-        for(var i = 0; i < separator.length; i++) {replaceAll(check, separator[i], '');}
-        return (check.length == 0);
+        for(var i = 0; i < lrc.length; i++) {if((lrc.charAt(i)) != '\n' && !isSeparator(lrc.charAt(i))) return false;}
+        return true;
     }
     function getNextAvailableCharPos(pos, direction) //from the @lrcCursor, searching the position of next non-'\n',-whitespace, or -separator char in the lyrics
     {
-        if(!isOnlyContainsSeparator(lrc)) //assert if lyrics only contain \n and separators to avoid infinate loops
+        for(var i = pos + direction; i != pos; i += direction)
         {
-            for(var i = pos + direction; ; i += direction)
-            {
-                if((direction == 1) && (i >= lrc.length)) i = 0;
-                if((direction == -1) && (i < 0)) i = lrc.length - 1;
-                if ((lrc.charAt(i)) == '\n' || isSeparator(lrc.charAt(i))) continue; else return i;
-            }
+            if((direction == 1) && (i >= lrc.length)) i = 0;
+            if((direction == -1) && (i < 0)) i = lrc.length - 1;
+            if ((lrc.charAt(i)) == '\n' || isSeparator(lrc.charAt(i))) continue; else return i;
         }
-        else lrcDisplay.text = "your lyrics file only contains spaces or separators like \'-\'!" 
     }
     function getNextSeparatorPos(pos, direction) //from the @lrcCursor, searching the position of next '\n', whitespace, or separator in the lyrics
     {
-        for(var i = pos + direction; ; i += direction)
+        for(var i = pos + direction; i != pos; i += direction)
         {
             if((direction == 1) && (i >= lrc.length)) return i;
             if((direction == -1) && (i < 0)) return -1;
@@ -820,6 +833,8 @@ MuseScore
     }
     function expandCharToWord(charPos) //selects the word that selected character belongs to
     {
+        //if the the char that is to expand is a '\n' or separator, find the next available char first then expand.
+        if ((lrc.charAt(charPos)) == '\n' || isSeparator(lrc.charAt(charPos))) charPos = getNextAvailableCharPos(charPos, 1);
         lrcCursor[0] = getNextSeparatorPos(charPos, -1) + 1;
         lrcCursor[1] = getNextSeparatorPos(charPos, 1);
     }
@@ -869,7 +884,7 @@ MuseScore
                     newlineVerticalIncrements.push(lrcDisplayDummy.height);
                     j = i + 1;
                 }
-            console.log("newlineVerticalIncrements" + newlineVerticalIncrements);
+            console.log("newlineVerticalIncrements: " + newlineVerticalIncrements);
         }
         else //on Windows, each line's height is always fixed. So no need to worry about it. One line's height for all.
         {
@@ -1162,7 +1177,7 @@ MuseScore
                 }
                 onClicked : 
                 {
-                    if(buttonOpenFile.text == "...") fileDialog.open();
+                    if(buttonOpenFile.text == "...") openLrcDialog.open();
                     if(buttonOpenFile.text == "⚙") settingsPopup.open();
                 }
             }
@@ -1234,34 +1249,52 @@ MuseScore
             width: inputButtons.width
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ScrollBar.vertical.interactive: true
+            height: ((lrcDisplay.height < (inputButtons.height*8)) ? lrcDisplay.height : (inputButtons.height*8))
             clip: true
             Text
             {
                 id: lrcDisplay
                 text: qsTr("Please load a lyrics file first")
+                enabled: true
+                visible: true
                 MouseArea
                 {
                     id: lrcDisplayMouseArea //MouseArea for Clickable Lyrics Function
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
                     enabled: inputButtons.enabled
+                    Timer
+                    {   // a timer for recognize double clicking event
+                        id: doubleClickTimer
+                        interval: 200; repeat: false;
+                        onTriggered: {}
+                    }
                     onClicked:
                     {
-                        console.log("Mouse clicked at X:" + mouse.x + " Y:" + mouse.y);
-                        var original = lrcCursor;
-                        var found = findChar(mouse.x, mouse.y);
-                        if(found != -1) 
+                        if(doubleClickTimer.running) //if it is double clicking, enters the Edit Lyrics
                         {
-                            if(lrcCursor.length == 1) lrcCursor[0] = found;
-                            else if(lrcCursor.length == 2) expandCharToWord(found);
-                            // Also push the lrcCursor change event to the undo_stack, so we can trace lrcCursor's position back
-                            // placeholder "彁" is a very edgy Kanji (幽霊文字, Yuureimoji) that has totally unknown etymology 
-                            // the choice is a tribute to LeaF's song 《彁》 https://www.youtube.com/watch?v=EsOU0V2kpUI
-                            pushToUndoStack(false, "彁:" + lrcCursorToString(original) + "->" + lrcCursorToString(lrcCursor));
-                            console.log("------Selected: " + getSelectedLyric() + ", lrcCursor is at: " + lrcCursorToString(lrcCursor) + "-----");
+                            doubleClickTimer.stop();
+                            editLyrics.enableLrcEdit();
                         }
-                        else console.log("given position has no char!");
-                        updateDisplay();
+                        else //if it is single clicking, select the lyrics
+                        {
+                            console.log("Mouse clicked at X:" + mouse.x + " Y:" + mouse.y);
+                            var original = lrcCursor;
+                            var found = findChar(mouse.x, mouse.y);
+                            if(found != -1) 
+                            {
+                                if(lrcCursor.length == 1) lrcCursor[0] = found;
+                                else if(lrcCursor.length == 2) expandCharToWord(found);
+                                // Also push the lrcCursor change event to the undo_stack, so we can trace lrcCursor's position back
+                                // placeholder "彁" is a very edgy Kanji (幽霊文字, Yuureimoji) that has totally unknown etymology 
+                                // the choice is a tribute to LeaF's song 《彁》 https://www.youtube.com/watch?v=EsOU0V2kpUI
+                                pushToUndoStack(false, "彁:" + lrcCursorToString(original) + "->" + lrcCursorToString(lrcCursor));
+                                console.log("------Selected: " + getSelectedLyric() + ", lrcCursor is at: " + lrcCursorToString(lrcCursor) + "-----");
+                            }
+                            else console.log("given position has no char!");
+                            updateDisplay();
+                            doubleClickTimer.start();
+                        }
                     }
                 }
             }
@@ -1297,6 +1330,124 @@ MuseScore
                 }
             }
         }
+        ScrollView
+        {
+            id: lrcEditScrollView
+            width: inputButtons.width
+            enabled: false
+            visible: false
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical.interactive: true
+            TextArea
+            {
+                id: lrcEdit
+                text: lrc
+                focus: true
+                persistentSelection: true
+                selectByMouse: true
+                height: 0
+                cursorVisible: true
+                mouseSelectionMode: TextEdit.SelectCharacters
+                color: "black"
+                font.pointSize: 9
+                textFormat: TextEdit.PlainText
+                wrapMode: TextEdit.Wrap
+                background: Rectangle {
+                    id: lrcEditBg
+                    visible: false
+                    color: "white"
+                    anchors.fill: parent
+                    border.color: "white"
+                }
+                Shortcut 
+                {
+                    sequence: StandardKey.Copy
+                    onActivated: lrcEdit.copy()
+                }
+                Shortcut 
+                {
+                    sequence: StandardKey.Cut
+                    onActivated: lrcEdit.cut()
+                }
+                Shortcut 
+                {
+                    sequence: StandardKey.Paste
+                    onActivated: lrcEdit.paste()
+                }
+            }
+
+        }
+        Grid
+        {
+            id: texteditButtons
+            columns: 4
+            rows: 1
+            spacing: 2
+            enabled: false
+            visible: false
+            function enableLrcDisplay()
+            {   //when editing is done, replace lrcEditScrollView with lrcDisplayScrollView
+                var pos = lrcEditScrollView.ScrollBar.vertical.position;
+                lrcEditScrollView.enabled = false;
+                lrcEditScrollView.visible = false;
+                lrcEditBg.visible = false;
+                lrcDisplayScrollView.visible = true;
+                lrcDisplayScrollView.enabled = true;
+                lrcDisplayMenuMouseArea.x = lrcDisplayScrollView.x;
+                lrcDisplayMenuMouseArea.y = lrcDisplayScrollView.y;
+                lrcDisplayMenuMouseArea.height = lrcDisplay.height > lrcDisplayScrollView.height ? lrcDisplayScrollView.height : lrcDisplay.height;
+                texteditButtons.visible = false;
+                texteditButtons.enabled = false;
+                lrcDisplayScrollView.ScrollBar.vertical.position = pos;
+                releaseUI();
+                lrcEditScrollView.height = ((lrcEdit.height < (inputButtons.height*8)) ? lrcEdit.height : (inputButtons.height*8));
+            }
+            Button
+            {   //"Cancel" buttons restores everything to its original states
+                id: cancelEditButton
+                text: qsTr("Cancel")
+                onClicked:
+                {
+                    acceptLyrics(editLyrics.lrcBackup); 
+                    texteditButtons.enableLrcDisplay(); 
+                    lrcCursor = editLyrics.lrcCursorBackup;
+                    updateDisplay();
+                }
+            }
+            Button 
+            {   //separator between "cancel" and "save as..." buttons. 
+                id: sepButton
+                width: lrcDisplayScrollView.width - (cancelEditButton.width + exportButton.width + finishButton.width) - texteditButtons.spacing*2
+                enabled: false
+                background: Rectangle{opacity: 0}
+            }
+            Button
+            {   //"Save As..." buttons saves the edited lyrics
+                id: exportButton
+                text: qsTr("Save As...")
+                onClicked:
+                { 
+                    if(lrcExportDialog.getPath(myFileLyrics.source)) lrcExportDialog.folder = lrcExportDialog.getPath(myFileLyrics.source); 
+                    lrcExportDialog.open(); 
+                }
+            }
+            Button
+            {   //"Finish" button updates the lrcDisplay.text with the edited lyrics
+                id: finishButton
+                text: qsTr("Finish")
+                onClicked: 
+                { 
+                    var curPos = lrcEdit.cursorPosition;
+                    acceptLyrics(lrcEdit.text);  
+                    texteditButtons.enableLrcDisplay(); 
+                    //when user finishes editing lyrics, move lrcCursor to approximately the edit cursor's position:
+                    if(lrcCursor.length == 1) lrcCursor = [curPos]; 
+                    else if(lrcCursor.length == 2) expandCharToWord(curPos);
+                    if(lrcCursor[0] != 0) prevChar();//to avoid '\n' or separator or whitespace selection
+                    updateDisplay();
+                }
+            }
+        }
 
         Text
         {
@@ -1318,15 +1469,23 @@ MuseScore
     {   //Right Button Menu for lrcDisplayScrollView. This MouseArea is outside of the main Column because 
         //there're mouse events capturing conflicts between ScrollView & MouseArea objects
         id: lrcDisplayMenuMouseArea
+        acceptedButtons: Qt.RightButton
         x: lrcDisplayScrollView.x
         y: lrcDisplayScrollView.y
         height: lrcDisplay.height > lrcDisplayScrollView.height ? lrcDisplayScrollView.height : lrcDisplay.height
-        width: lrcDisplayScrollView.width
-        acceptedButtons: Qt.RightButton
+        width: inputButtons.width
         onClicked:
         {
-            lrcDisplayMenu.x = mouse.x-10; lrcDisplayMenu.y = mouse.y-10;
-            lrcDisplayMenu.open();
+            if(lrcDisplayScrollView.enabled)
+            {
+                lrcDisplayMenu.x = mouse.x-10; lrcDisplayMenu.y = mouse.y-10;
+                lrcDisplayMenu.open();
+            }
+            else if(lrcEditScrollView.enabled)
+            {
+                lrcEditContextMenu.x = mouse.x-10; lrcEditContextMenu.y = mouse.y-10;
+                lrcEditContextMenu.open();
+            }
         }
         property var wheelIncrement: 0;
         property var maxPointSize: (Qt.platform.os == "osx") ? 17 : 12;
@@ -1361,11 +1520,47 @@ MuseScore
             id: lrcDisplayMenu
             scale: 0.9
             spacing: 0.5
-            bottomPadding: 3
-            leftPadding: 3
-            topPadding: 3
-            rightPadding: 3
-            MenuItem { id: editLyrics; text: "Edit Lyrics";}
+            bottomPadding: 3; leftPadding: 3; topPadding: 3; rightPadding: 3
+            MenuItem 
+            { 
+                id: editLyrics
+                text: qsTr("Edit Lyrics")
+                property var lrcBackup: "";
+                property var lrcCursorBackup: [];
+                function enableLrcEdit()
+                {
+                    lrcBackup = lrc; //take a snapshot of unmodified lyrics for the "cancel" button
+                    lrcCursorBackup = lrcCursor;
+                    var pos = lrcDisplayScrollView.ScrollBar.vertical.position; //take a snapshot of ScrollBar's position
+                    //disable lrcDisplay and replace everything with lrcEdit.
+                    lrcDisplayScrollView.visible = false;
+                    lrcDisplayScrollView.enabled = false;
+                    lrcEditScrollView.visible = true;
+                    lrcEditScrollView.enabled = true;
+                    lrcEditBg.visible = true;
+                    lrcEditScrollView.enabled = true;
+                    lrcEdit.focus = true;
+                    lrcEdit.text = lrc;
+                    lrcEdit.font.pointSize = lrcDisplay.font.pointSize;
+                    lrcEditScrollView.ScrollBar.vertical.position = pos;
+                    //sync the cursor position in lrcEdit with lrcCursor position in the lrcDisplay
+                    if(lrcCursorBackup.length == 1) lrcEdit.cursorPosition = lrcCursorBackup[0] + 1;
+                    else if(lrcCursorBackup.length == 2) lrcEdit.cursorPosition = lrcCursorBackup[1];
+                    //give user the freedom to type lyrics when there is no lyrics loaded:
+                    if(lrc != "") lrcEditScrollView.height = ((lrcEdit.height < (inputButtons.height*8)) ? lrcEdit.height : (inputButtons.height*8));
+                    //show "cancel", "save as..." and "Finish" buttons
+                    texteditButtons.visible = true;
+                    texteditButtons.enabled = true;
+                    //disable other UI to avoid glitches
+                    suspendUI();
+                    //resize context menu MouseArea
+                    lrcDisplayMenuMouseArea.x = lrcEditScrollView.x;
+                    lrcDisplayMenuMouseArea.y = lrcEditScrollView.y;
+                    lrcDisplayMenuMouseArea.height = lrcEditScrollView.height ? lrcEditScrollView.height : lrcEdit.height;
+                    lrcDisplayMenuMouseArea.enabled = true;
+                }
+                onTriggered: enableLrcEdit();
+            }
             MenuSeparator { }
             MenuItem 
             { 
@@ -1488,10 +1683,7 @@ MuseScore
                     id: japaneseToKanaModeMenu
                     scale: lrcDisplayMenu.scale
                     spacing: lrcDisplayMenu.spacing
-                    bottomPadding: lrcDisplayMenu.bottomPadding
-                    leftPadding:lrcDisplayMenu.leftPadding
-                    topPadding: lrcDisplayMenu.topPadding
-                    rightPadding: lrcDisplayMenu.rightPadding
+                    bottomPadding: lrcDisplayMenu.bottomPadding; leftPadding:lrcDisplayMenu.leftPadding; topPadding: lrcDisplayMenu.topPadding; rightPadding: lrcDisplayMenu.rightPadding
                     MenuItem { text: qsTr("to Hiragana あ"); onTriggered:{japaneseToKana.convertJapaneseTo("hiragana");}}
                     MenuItem { text: qsTr("to Katakana ア"); onTriggered:{japaneseToKana.convertJapaneseTo("katakana");}}
                     MenuSeparator { }
@@ -1505,9 +1697,34 @@ MuseScore
                 } 
             }
         }
+        Menu 
+        {
+            id: lrcEditContextMenu
+            scale: lrcDisplayMenu.scale
+            spacing: lrcDisplayMenu.spacing
+            bottomPadding: lrcDisplayMenu.bottomPadding; leftPadding:lrcDisplayMenu.leftPadding; topPadding: lrcDisplayMenu.topPadding; rightPadding: lrcDisplayMenu.rightPadding
+            MenuItem 
+            {
+                text: qsTr("Copy")
+                enabled: lrcEdit.selectedText
+                onTriggered: lrcEdit.copy()
+            }
+            MenuItem 
+            {
+                text: qsTr("Cut")
+                enabled: lrcEdit.selectedText
+                onTriggered: lrcEdit.cut()
+            }
+            MenuItem 
+            {
+                text: qsTr("Paste")
+                enabled: lrcEdit.canPaste
+                onTriggered: lrcEdit.paste()
+            }
+        }
     }
 
-    //Button{id: testBTN; text: "test!"; onClicked: {} }
+    //Button{id: testBTN; text: "test!"; onClicked: {console.log()} }
 
     //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
     //such as English Hyphenation and Japanese Kanji to Kana
@@ -1516,6 +1733,7 @@ MuseScore
     {
         lrcDisplayMenuMouseArea.enabled = false;
         inputButtons.enabled = false;
+        fileDrop.enabled = false;
         buttonOpenFile.enabled = false;
         autoReadLyricsMouseArea.enabled = false
         lrcDisplayMouseArea.enabled = false;
@@ -1524,6 +1742,7 @@ MuseScore
     {
         lrcDisplayMenuMouseArea.enabled = true;
         inputButtons.enabled = true;
+        fileDrop.enabled = true;
         buttonOpenFile.enabled = true;
         autoReadLyricsMouseArea.enabled =true;
         lrcDisplayMouseArea.enabled = true;
