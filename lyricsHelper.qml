@@ -102,6 +102,7 @@ MuseScore
     {
         lrc = text;
         lrcDisplay.text = text; //update lyrics text to displayer
+        lrcDisplay.width = lrcDisplayScrollView.width;
         if(lrcCursor.length == 1) lrcCursor = [0]; else {lrcCursor = [0,1]; expandCharToWord(0);}//reset @lrcCursor
         prevChar(); nextChar(); //forcefully skip all the whitespaces in the file head.
         inputButtons.enabled = true; //recover input buttons' availability
@@ -136,7 +137,7 @@ MuseScore
         curScorePath = curScorePath.slice(8);
         lyricSource.horizontalAlignment = Text.AlignHCenter;
         lyricSource.text = qsTr("Auto Loading Lyrics...");
-        searchTxtDelayRunning.start();
+        lyricSource.searchTxtDelayRunning.start();
     }
     FileIO //FileIO stores the path of the current score
     {
@@ -851,91 +852,103 @@ MuseScore
             expandCharToWord(getNextAvailableCharPos(lrcCursor[0], -1));
     }
 
-    //verticalIncrement and separatorIncrement indicate how many pixels of a line & a whitespace (or other separators) on user's deivce screen.
-    //use getVerticalIncrement() to forcefully resize the invisible lrcDisplayDummy and use its width to calculate the pixel increments.
+    //verticalIncrements and separatorIncrement indicate how many pixels of a line & a whitespace (or other separators) on user's deivce screen.
+    //use getVerticalIncrement() to forcefully resize the invisible lrcDisplayDummy and use its width to store the pixel line height increments
     //This is a very cheesy solution but worked pretty well.
-    property var verticalIncrement: 0;
     property var separatorIncrement: [];
     property var newlinePositions: [0]; 
-    property var newlineVerticalIncrements: [];
+    property var verticalIncrements: [];
     function getVerticalIncrement() 
-    { //use a list @newlinePositions to store all the position index of beigning of newlines in lrc
-        newlinePositions = [0]; separatorIncrement = [];
-        for(var i = 0; i < lrc.length; i++)
-            if (lrc.charAt(i) == '\n') newlinePositions.push(i);
-        lrcDisplayDummy.text = convertLineBreak("1");
-        verticalIncrement = lrcDisplayDummy.height;
+    {   //use @separatorIncrement to store the horizontal lengths (in pixel) of each separators
+        separatorIncrement = [];
+        lrcDisplayDummy2.text = convertLineBreak("1");
         for(var i = 0; i < separator.length; i++)
         {
-            lrcDisplayDummy.text = convertLineBreak("1");
-            var before = lrcDisplayDummy.width;
-            lrcDisplayDummy.text = convertLineBreak("1" + separator[i]);
-            separatorIncrement.push(lrcDisplayDummy.width - before);
+            lrcDisplayDummy2.text = convertLineBreak("1");
+            var before = lrcDisplayDummy2.width;
+            lrcDisplayDummy2.text = convertLineBreak("1" + separator[i]);
+            separatorIncrement.push(lrcDisplayDummy2.width - before);
         }
-        console.log("separatorIncrement: " + separatorIncrement);
-        //on MacOS, each lines' height is slightly different to each other depends on the text. So we use a list to track every line's pixel height.
-        newlineVerticalIncrements = [];
-        if(Qt.platform.os == "osx") 
+        console.log("Current separators: " + separator + ". separatorIncrement: " + separatorIncrement);
+        //Start record each newline's height and the start index of the newlines. Put them into @verticalIncrements and @newlinePositions for findChar()
+        verticalIncrements = []; newlinePositions = [];
+        for(var i = 0, j = 0; i < lrc.length; i++)
         {
-            for(var i = 0, j = 0; i < lrc.length; i++)
-                if (lrc.charAt(i) == '\n')
-                {
-                    lrcDisplayDummy.text = convertLineBreak(lrc.substring(j,i));
-                    newlineVerticalIncrements.push(lrcDisplayDummy.height);
-                    j = i + 1;
-                }
-            console.log("newlineVerticalIncrements: " + newlineVerticalIncrements);
+            if (lrc.charAt(i) == '\n') //detects newline, start checking if the newline is wrapped
+            {
+                newlinePositions.push(j);
+                lrcDisplayDummy2.text = convertLineBreak(lrc.substring(j,i)); //lrcDisplayDummy2 is for detecting wrapping events
+                lrcDisplayDummy.text = convertLineBreak(lrc.substring(j,i)); //compare the heights of lrcDisplayDummy with lrcDisplayDummy2 to see if wrapping happens
+                var height = lrcDisplayDummy.height;
+                if(lrcDisplayDummy2.height > lrcDisplayDummy.height) //check possible wrapped line
+                {//if a wrapped line was found, start calculating newline's wrapped contents, and record their vertical height like normal newlines
+                    lrcDisplayDummy2.text = "";
+                    //Text's Text.wrapMode wraps the line by word's boundries. so first get newline's list of words:
+                    var wordlist = lrc.substring(j,i).replace(/\s+$/gm, ' ').split(' '); 
+                    for(var k = 0, indexOfk = j; k < wordlist.length; k++)
+                    {
+                        height = lrcDisplayDummy2.height;
+                        //fill in lrcDisplayDummy2 one word by one, force its width increases, until the line wrapping happens
+                        lrcDisplayDummy2.text = convertLineBreak(lrcDisplayDummy2.text + String(wordlist[k]).replace(/\s+$/gm, ' ') + ' '); 
+                        if(lrcDisplayDummy2.height > height) 
+                        {//find the word that causes wrapping behavior, chop all previous words and put them in the records,
+                         //and start filling lrcDisplayDummy2 again from that word
+                            newlinePositions.push(indexOfk)
+                            verticalIncrements.push(height);
+                            console.log("wrapped point found! caused word: " + wordlist[k] + ", position at: " + indexOfk);
+                            lrcDisplayDummy2.text = convertLineBreak(String(wordlist[k]).replace(/\s+$/gm, ' '));
+                            height = lrcDisplayDummy2.height;
+                        }
+                        indexOfk += wordlist[k].length + 1; //update the word's starting character's index
+                    }
+                    verticalIncrements.push(lrcDisplayDummy2.height);
+                } else verticalIncrements.push(height); //if no wrapping happens
+                j = i + 1;
+            }
         }
-        else //on Windows, each line's height is always fixed. So no need to worry about it. One line's height for all.
-        {
-            lrcDisplayDummy.text = convertLineBreak("1\n1");
-            verticalIncrement = lrcDisplayDummy.height - verticalIncrement;
-            console.log("vertical line increment: " + verticalIncrement);
-        }
+        console.log("verticalIncrements: " + verticalIncrements);
+        console.log("newlinePositions: " + newlinePositions);
     }
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
-        var targetRow = Math.ceil(posY / verticalIncrement); //target row
-        var txt = lrc; //buffer the lyrics
-        var rowPos = 0; //retrieve the starting index in lrc of the target row
-        if(Qt.platform.os == "osx") //MacOS case for rowPos
+        var targetRow = 0; //stores targetRow #
+        var targetRowPos = 0; //stores targetRow's starting index in lrc
+
+        var sum = 0; var found = false;
+        for(var i = 0; i < verticalIncrements.length; i++)
         {
-            var sum = 0;
-            for(var i = 0; i < newlineVerticalIncrements.length; i++)
-            {
-                sum += newlineVerticalIncrements[i]; //add line heights until reaches user click posY
-                if(sum > posY) {rowPos = newlinePositions[i]; sum = -1; /*found mark*/ break;}
-            }
-            if(sum != -1) rowPos = newlinePositions[newlineVerticalIncrements.length]; //if user click is the EOF empty line
+            sum += verticalIncrements[i]; //add line heights until reaches user click posY
+            if(sum > posY) {targetRowPos = newlinePositions[i]; targetRow = i; found = true; /*found mark*/ break;}
         }
-        else rowPos = newlinePositions[targetRow-1]
+        if(!found) targetRowPos = newlinePositions[verticalIncrements.length]; //if user click is the EOF empty line
+        
         lrcDisplayDummy.text = ""; 
-        for(var i = rowPos; i < txt.length; i++)
+        for(var i = targetRowPos; i < lrc.length; i++)
         {
             //forcefully calculate the horizontal size of lyrics by append characters to the invisible lrcDisplayDummy
             //THIS IS SUCH A DIRTY WORKAROUND
             //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap trailing whitespaces here:
-            lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/\s+$/gm, ' '); 
+            lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(lrc.charAt(i))).replace(/\s+$/gm, ' '); 
             if(lrcDisplayDummy.text.startsWith("<br />")) lrcDisplayDummy.text = lrcDisplayDummy.text.substring(6);
             //console.log("buffered text: " + lrcDisplayDummy.text)
             if(posX < lrcDisplayDummy.width) 
             {
-                if(isSeparator(txt.charAt(i))) //if user selects a whitespace, snap to the nearest character
+                if(isSeparator(lrc.charAt(i))) //if user selects a whitespace, snap to the nearest character
                 {
                     //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
-                    if(i == 0 || i == txt.length - 1) return -1; 
-                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) == '\n' ) return -1;
-                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) return getNextAvailableCharPos(i, 1);
-                    if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) return getNextAvailableCharPos(i, -1);
+                    if(i == 0 || i == lrc.length - 1) return -1; 
+                    if(lrc.charAt(i-1) == '\n' && lrc.charAt(i+1) == '\n' ) return -1;
+                    if(lrc.charAt(i-1) == '\n' && lrc.charAt(i+1) != '\n' ) return getNextAvailableCharPos(i, 1);
+                    if(lrc.charAt(i-1) != '\n' && lrc.charAt(i+1) == '\n' ) return getNextAvailableCharPos(i, -1);
                     //snap to the nearest character (use prevChar() and nextChar() to also skip all the nearest whitespaces)
-                    if(posX - (lrcDisplayDummy.width - separatorIncrement[parseInt(isSeparator(txt.charAt(i)))]) < lrcDisplayDummy.width - posX)
+                    if(posX - (lrcDisplayDummy.width - separatorIncrement[parseInt(isSeparator(lrc.charAt(i)))]) < lrcDisplayDummy.width - posX)
                         return getNextAvailableCharPos(i, -1);
                     else
                         return getNextAvailableCharPos(i, 1);
                 }    
                 return i;
             }
-            if(i == txt.length - 1 || txt.charAt(i+1) == '\n') return -1; //if reach the EOF or not found a character in the given X position before going to next line
+            if(i == lrc.length - 1 || lrc.charAt(i+1) == '\n') return -1; //if reach the EOF or not found a character in the given X position before going to next line
         }
         return -1;
     }
@@ -1066,6 +1079,13 @@ MuseScore
                     width: parent.width
                     onClicked: autoLoadLyrics();
                 }
+                Timer 
+                { 
+                    id: searchTxtDelayRunning // for autoLoadLyrics()
+                    repeat: false
+                    interval: 250
+                    onTriggered: searchTxtFolderListModel.searchTxt()
+                } 
                 Timer // in case of autoLoadLyrics() not finding any matched .txt files, prompt failed message and roll back the lyrics
                 {   
                     id: autoReadLyricsFailedMessage
@@ -1257,6 +1277,8 @@ MuseScore
                 text: qsTr("Please load a lyrics file first")
                 enabled: true
                 visible: true
+                wrapMode: Text.WordWrap
+                width: lrcDisplayScrollView.width
                 MouseArea
                 {
                     id: lrcDisplayMouseArea //MouseArea for Clickable Lyrics Function
@@ -1456,12 +1478,16 @@ MuseScore
             text: "buffer text"
             font.family: lrcDisplay.font.family
             font.pointSize: lrcDisplay.font.pointSize
-            Timer { 
-                id: searchTxtDelayRunning // for autoLoadLyrics()
-                repeat: false
-                interval: 250
-                onTriggered: searchTxtFolderListModel.searchTxt()
-            } 
+        }
+        Text
+        {
+            id: lrcDisplayDummy2
+            visible: false
+            wrapMode: lrcDisplay.wrapMode
+            width: lrcDisplayScrollView.width
+            text: "for line vertical increment calculation (because I need to know all the line wrappings, and lrcDisplayDummy is for horizontal position calculation so it cannot do wrappings)"
+            font.family: lrcDisplay.font.family
+            font.pointSize: lrcDisplay.font.pointSize
         }
     }
     
