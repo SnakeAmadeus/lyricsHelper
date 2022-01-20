@@ -39,7 +39,9 @@ MuseScore
     //helper toString() function for @lrcCursor
     function lrcCursorToString(c) {if(c.length == 1) return c[0]; else return c[0] + "-" + c[1];}
     //helper parse() function that parses the string format of toString()
-    function lrcCursorParse(c) {if(c.split('-').length == 1) return c.parseInt(); else return [c.split('-')[0].parseInt(),c.split('-')[1].parseInt()];}
+    function lrcCursorParse(c) {if(c.split('-').length == 1) return [parseInt(c)]; else return [parseInt(c.split('-')[0]),parseInt(c.split('-')[1])];}
+    //helper clone() that clones a copy of lrcCursor
+    function lrcCursorClone(c) {return c.slice();}
 
     //@hyphenatedMode decides whether the single unit of lyrics selection is between whitespaces or (whitespaces and hyphens.) default = false
     property alias hyphenatedMode: hyphenatedModeToggle.checked;
@@ -861,13 +863,13 @@ MuseScore
     function getVerticalIncrement() 
     {   //use @separatorIncrement to store the horizontal lengths (in pixel) of each separators
         separatorIncrement = [];
-        lrcDisplayDummy2.text = convertLineBreak("1");
+        lrcDisplayDummyWrapped.text = convertLineBreak("1");
         for(var i = 0; i < separator.length; i++)
         {
-            lrcDisplayDummy2.text = convertLineBreak("1");
-            var before = lrcDisplayDummy2.width;
-            lrcDisplayDummy2.text = convertLineBreak("1" + separator[i]);
-            separatorIncrement.push(lrcDisplayDummy2.width - before);
+            lrcDisplayDummyWrapped.text = convertLineBreak("1");
+            var before = lrcDisplayDummyWrapped.width;
+            lrcDisplayDummyWrapped.text = convertLineBreak("1" + separator[i]);
+            separatorIncrement.push(lrcDisplayDummyWrapped.width - before);
         }
         console.log("Current separators: " + separator + ". separatorIncrement: " + separatorIncrement);
         //Start record each newline's height and the start index of the newlines. Put them into @verticalIncrements and @newlinePositions for findChar()
@@ -877,31 +879,31 @@ MuseScore
             if (lrc.charAt(i) == '\n') //detects newline, start checking if the newline is wrapped
             {
                 newlinePositions.push(j);
-                lrcDisplayDummy2.text = convertLineBreak(lrc.substring(j,i)); //lrcDisplayDummy2 is for detecting wrapping events
-                lrcDisplayDummy.text = convertLineBreak(lrc.substring(j,i)); //compare the heights of lrcDisplayDummy with lrcDisplayDummy2 to see if wrapping happens
+                lrcDisplayDummyWrapped.text = convertLineBreak(lrc.substring(j,i)); //lrcDisplayDummyWrapped is for detecting wrapping events
+                lrcDisplayDummy.text = convertLineBreak(lrc.substring(j,i)); //compare the heights of lrcDisplayDummy with lrcDisplayDummyWrapped to see if wrapping happens
                 var height = lrcDisplayDummy.height;
-                if(lrcDisplayDummy2.height > lrcDisplayDummy.height) //check possible wrapped line
+                if(lrcDisplayDummyWrapped.height > lrcDisplayDummy.height) //check possible wrapped line
                 {//if a wrapped line was found, start calculating newline's wrapped contents, and record their vertical height like normal newlines
-                    lrcDisplayDummy2.text = "";
+                    lrcDisplayDummyWrapped.text = "";
                     //Text's Text.wrapMode wraps the line by word's boundries. so first get newline's list of words:
                     var wordlist = lrc.substring(j,i).replace(/\s+$/gm, ' ').split(' '); 
                     for(var k = 0, indexOfk = j; k < wordlist.length; k++)
                     {
-                        height = lrcDisplayDummy2.height;
-                        //fill in lrcDisplayDummy2 one word by one, force its width increases, until the line wrapping happens
-                        lrcDisplayDummy2.text = convertLineBreak(lrcDisplayDummy2.text + String(wordlist[k]).replace(/\s+$/gm, ' ') + ' '); 
-                        if(lrcDisplayDummy2.height > height) 
+                        height = lrcDisplayDummyWrapped.height;
+                        //fill in lrcDisplayDummyWrapped one word by one, force its width increases, until the line wrapping happens
+                        lrcDisplayDummyWrapped.text = convertLineBreak(lrcDisplayDummyWrapped.text + String(wordlist[k]).replace(/\s+$/gm, ' ') + ' '); 
+                        if(lrcDisplayDummyWrapped.height > height) 
                         {//find the word that causes wrapping behavior, chop all previous words and put them in the records,
-                         //and start filling lrcDisplayDummy2 again from that word
+                         //and start filling lrcDisplayDummyWrapped again from that word
                             newlinePositions.push(indexOfk)
                             verticalIncrements.push(height);
                             console.log("wrapped point found! caused word: " + wordlist[k] + ", position at: " + indexOfk);
-                            lrcDisplayDummy2.text = convertLineBreak(String(wordlist[k]).replace(/\s+$/gm, ' '));
-                            height = lrcDisplayDummy2.height;
+                            lrcDisplayDummyWrapped.text = convertLineBreak(String(wordlist[k]).replace(/\s+$/gm, ' '));
+                            height = lrcDisplayDummyWrapped.height;
                         }
                         indexOfk += wordlist[k].length + 1; //update the word's starting character's index
                     }
-                    verticalIncrements.push(lrcDisplayDummy2.height);
+                    verticalIncrements.push(lrcDisplayDummyWrapped.height);
                 } else verticalIncrements.push(height); //if no wrapping happens
                 j = i + 1;
             }
@@ -1011,7 +1013,7 @@ MuseScore
                 var snapshot_lyrics = undo_stack.pop();
                 var snapshot_note_ticks = undo_stack.pop();
                 var cursor = getSelectedCursor();
-                var tempLrcCursor = lrcCursor;
+                var tempLrcCursor = lrcCursorClone(lrcCursor);
                 prevChar(); //get last lrcCursor position but skip all the whitespaces and \n.
                 var current_lyrics = getSelectedLyric();
                 console.log("Snapshot note ticks = " + snapshot_note_ticks + ", " + "Current ticks: " + cursor.tick);
@@ -1041,7 +1043,7 @@ MuseScore
                 undo_stack.push(snapshot_lyrics);
                 undo_stack.push(snapshot_lrcCursor);
                 undo_stack.push(snapshot_type);
-                lrcCursor = tempLrcCursor; //also roll back the lrcCursor
+                lrcCursor = lrcCursorClone(tempLrcCursor); //also roll back the lrcCursor
                 console.log("But the action that has been undone is not from this plugin");
                 updateDisplay(); 
                 return false;
@@ -1301,7 +1303,7 @@ MuseScore
                         else //if it is single clicking, select the lyrics
                         {
                             console.log("Mouse clicked at X:" + mouse.x + " Y:" + mouse.y);
-                            var original = lrcCursor;
+                            var original = lrcCursorClone(lrcCursor);
                             var found = findChar(mouse.x, mouse.y);
                             if(found != -1) 
                             {
@@ -1481,7 +1483,7 @@ MuseScore
         }
         Text
         {
-            id: lrcDisplayDummy2
+            id: lrcDisplayDummyWrapped
             visible: false
             wrapMode: lrcDisplay.wrapMode
             width: lrcDisplayScrollView.width
