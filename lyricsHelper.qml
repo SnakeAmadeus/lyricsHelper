@@ -48,6 +48,9 @@ MuseScore
     property var separator: [' '];
     function isSeparator(s) {for(var i = 0; i < separator.length; i++) {if (s == separator[i]) return i.toString();} return false;}
 
+    //decides which line of lyrics is going to input.
+    property var lyricsLineNum: 0;
+
     onRun: {}
 
     FileIO 
@@ -309,6 +312,15 @@ MuseScore
     //helper function that returns a string of currently selected lyrics
     function getSelectedLyric() {if(lrcCursor.length == 1) return lrc.charAt(lrcCursor[0]); else return lrc.substring(lrcCursor[0],lrcCursor[1]);}
 
+    //helper function that returns the note's lyrics object at cursor's position with specified verse line. If not found @return false.
+    function getNoteLyrics(cursor, verseLine)
+    {
+        if(cursor.element.lyrics.length == 0) return false;
+        for(var i = 0; i < cursor.element.lyrics.length; i++)
+            if(cursor.element.lyrics[i].verse == verseLine) return cursor.element.lyrics[i];
+        return false;
+    }
+
     //core function for the "Add Syllable" button
     function addSyllable(cursor)
     {
@@ -321,7 +333,7 @@ MuseScore
             if(nextCursor.element == null) //if reaches the score EOF
             {
                 cursor = getSelectedCursor();
-                if(cursor.element.lyrics.length == 1) //if there already been lyrcis on the next element, do nothing and deselect
+                if(getNoteLyrics(cursor,lyricsLineNum)) //if there already been lyrcis on the next element, do nothing and deselect
                 {
                     console.log("addSyllable(): EOF detected, you can't add more lyrics");
                     curScore.selection.clear();
@@ -333,7 +345,7 @@ MuseScore
                     var character = getSelectedLyric();
                     var fill = newElement(Element.LYRICS);
                     fill.text = character;
-                    fill.voice = cursor.voice;
+                    fill.verse = lyricsLineNum;
                     curScore.startCmd();
                         console.log("addSyllable(): current character = " + fill.text);
                         cursor.element.add(fill);
@@ -350,18 +362,18 @@ MuseScore
             var character = getSelectedLyric();
             var fill = newElement(Element.LYRICS);
             fill.text = character;
-            fill.voice = cursor.voice;
+            fill.verse = lyricsLineNum;
             //wrap the actions in startCmd() and endCmd() for real-time reactions from the score. 
             //Sepcial Thanks to Jojo-Schmitz https://musescore.org/en/node/326916
             curScore.startCmd();
                 console.log("addSyllable(): current character = " + fill.text);
                 var tempTick = cursor.tick;
-                if(cursor.element.lyrics.length > 0) //if replaceMode is ON, replace the existed character
+                if(getNoteLyrics(cursor,lyricsLineNum)) //if replaceMode is ON, replace the existed character
                 {
                     console.log("addSyllable(): conflicted lyrics detected!");
                     if(replaceMode == 1)
                     {
-                        removeElement(cursor.element.lyrics[0]);
+                        removeElement(getNoteLyrics(cursor,lyricsLineNum));
                     }
                     else
                     {
@@ -379,8 +391,8 @@ MuseScore
                         {
                             cursor.prev();
                             checkLength += durationTo64(cursor.element.duration);
-                        }while(durationTo64(cursor.element.lyrics[0].lyricTicks) == 0) 
-                        cursor.element.lyrics[0].lyricTicks = fraction(checkLength, 64);
+                        }while(durationTo64(getNoteLyrics(cursor,lyricsLineNum).lyricTicks) == 0) 
+                        getNoteLyrics(cursor,lyricsLineNum).lyricTicks = fraction(checkLength, 64);
                     }
                     else
                     {
@@ -396,7 +408,7 @@ MuseScore
                 }
                 cursor.element.add(fill);
                 addHyphen(cursor);
-                pushToUndoStack(cursor, "addSyllable()")
+                pushToUndoStack(cursor, "addSyllable()");
                 cursor.next();
                 console.log("addSyllable(): Next Selection is " + nextCursor.element.type);
                 //if the next element is not a note
@@ -413,7 +425,7 @@ MuseScore
                             {
                                 console.log("addSyllable(): EOF detected, close the lyrics input process");
                                 cursor.rewindToTick(tempTick);//corner case: tail of score are rests:
-                                if(cursor.element.lyrics.length > 1) removeElement(cursor.element.lyrics[1]);
+                                if(getNoteLyrics(cursor,lyricsLineNum)) removeElement(getNoteLyrics(cursor,lyricsLineNum));
                                 curScore.selection.clear();
                                 curScore.endCmd();
                                 return false;//encounters the EOF, immediately shut down
@@ -474,13 +486,13 @@ MuseScore
         {
             console.log("-----------addMelisma() start----------");
             //MuseScore's Lyrics' Melisma was manipulated by the lyrics.lyricTicks property, which is a property of Ms::PluginAPI::Element
-            //Because the lyrics Object was wrapped in Ms::PluginAPI::Element, so the cursor.element.lyrics[0]'s type is actually Ms::PluginAPI::Element, instead of a lyrics object
+            //Because the lyrics Object was wrapped in Ms::PluginAPI::Element, so the cursor.element.lyrics's type is actually Ms::PluginAPI::Element, instead of a lyrics object
             //There is no direct access to the object of Lyrics' members as shown in the libmscore/lyrics.h
             //The definition of this lyrics.lyricTicks is the sum of note values from *begining* of the first note to the *begining* of the last note.
             //So the calculation rule of the length of Melisma line will be from the selected note to the last note that has lyrics under it.
             //Move the cursor backward, Add up the note value of [start note, end note); if rests are other wack occurred, abort the operation.
             var tempTick = cursor.tick; //backup cursor's original position
-            var endHasLyrics = (cursor.element.lyrics.length > 0);
+            var endHasLyrics = getNoteLyrics(cursor,lyricsLineNum);
             var melismaLength = 0;
             //things need to be checked for the current selected note to avoid glitches
             //check if the selected note is in the middle of the tie that has lyric on the first tied note, it will be meaningless to add melisma in this case
@@ -488,7 +500,7 @@ MuseScore
             {
                 curScore.selection.select(cursor.element.notes[0].firstTiedNote);
                 cursor = getSelectedCursor();
-                if(cursor.element.lyrics.length >= 1)
+                if(getNoteLyrics(cursor,lyricsLineNum))
                 {
                     console.log("addMelisma(): Middle of the tie detected, do nothing"); 
                     cursor.rewindToTick(tempTick);
@@ -499,12 +511,12 @@ MuseScore
                 curScore.selection.select(cursor.element.notes[0]);
             }
             //check if the current note already has lyrics, it will cause conflicts in this case
-            if(cursor.element.lyrics.length != 0)
+            if(getNoteLyrics(cursor,lyricsLineNum))
             {
                 if(replaceMode == 1)//depends on whether replace mode is ON or OFF. If ON, current lyrics will be dropped and become melisma line
                 {
                     console.log("addMelisma(): Lyrics conflict detected, drop existed lyrics");
-                    removeElement(cursor.element.lyrics[0]);
+                    removeElement(getNoteLyrics(cursor,lyricsLineNum));
                 }
                 else
                 {
@@ -521,7 +533,7 @@ MuseScore
             {
                 console.log("addMelisma(): Rest detected, do nothing"); return false;
             }
-            if(cursor.element.lyrics.length != 0 && endHasLyrics)//if the prev note has lyrics AND the selected note also has, adding melisma line will be notationally meaningless, abort the operation
+            if(getNoteLyrics(cursor,lyricsLineNum) && endHasLyrics)//if the prev note has lyrics AND the selected note also has, adding melisma line will be notationally meaningless, abort the operation
             {
                 console.log("addMelisma(): Current note and prev note have lyrics back to back detected, do nothing"); return false;
             }
@@ -539,11 +551,11 @@ MuseScore
                     console.log("addMelisma(): Rest detected, do nothing"); return false;
                 }
                 melismaLength += durationTo64(cursor.element.duration);//duration to 64 for more convenient calculation
-            } while(cursor.element.lyrics.length == 0)
+            } while(!getNoteLyrics(cursor,lyricsLineNum))
             melismaLength = fraction(melismaLength, 64); //64 to duration
             curScore.startCmd();
-                cursor.element.lyrics[0].lyricTicks = melismaLength;
-                console.log("addMelisma(): Final Melisma Length: " + cursor.element.lyrics[0].lyricTicks.str);
+                getNoteLyrics(cursor,lyricsLineNum).lyricTicks = melismaLength;
+                console.log("addMelisma(): Final Melisma Length: " + getNoteLyrics(cursor,lyricsLineNum).lyricTicks.str);
                 cursor.rewindToTick(tempTick);
                 cursor.next();
                 //if reaches the score EOF
@@ -587,12 +599,12 @@ MuseScore
             var tempTick = cursor.tick;
             var character = getSelectedLyric();
             //if current notes has lyrics already, concatenate the character to the original one right away.
-            if(cursor.element.lyrics.length == 1)
+            if(getNoteLyrics(cursor,lyricsLineNum))
             {
                 curScore.startCmd();
                     console.log("addSynalepha(): character to be added: " + character);
-                    var concatenated = cursor.element.lyrics[0].text + character;
-                    cursor.element.lyrics[0].text = concatenated;
+                    var concatenated = getNoteLyrics(cursor,lyricsLineNum).text + character;
+                    getNoteLyrics(cursor,lyricsLineNum).text = concatenated;
                     nextChar();
                     updateDisplay();
                     pushToUndoStack(cursor, "addSynalepha()");
@@ -601,7 +613,7 @@ MuseScore
             }
             //in the case of current selected note has no lyrics but the pervious has lyrics (MOST LIKELY it's in the middle of the editing),
             //add Synalepha to the previous character
-            if(cursor.element.lyrics.length == 0)
+            if(!getNoteLyrics(cursor,lyricsLineNum))
             {
                 do
                 {
@@ -623,12 +635,12 @@ MuseScore
                     }
                 } while(cursor.element.type != 93) //if no notes were found before the selection, cursor will eventually reach the filehead.
                 //assume we found a note
-                if(cursor.element.lyrics.length == 1)
+                if(getNoteLyrics(cursor,lyricsLineNum))
                 {
                     curScore.startCmd();
                         console.log("addSynalepha(): character to be added: " + character);
-                        var concatenated = cursor.element.lyrics[0].text + character;
-                        cursor.element.lyrics[0].text = concatenated;
+                        var concatenated = getNoteLyrics(cursor,lyricsLineNum).text + character;
+                        getNoteLyrics(cursor,lyricsLineNum).text = concatenated;
                         pushToUndoStack(cursor, "addSynalepha()");
                         nextChar();
                         updateDisplay();
@@ -641,11 +653,11 @@ MuseScore
                     //if that note has no lyrics but inside a melisma line, dump the character to the begining of the melisma line
                     if(isInsideMelismaLine(cursor)) 
                     {
-                        while(durationTo64(cursor.element.lyrics[0].lyricTicks) == 0) {cursor.prev();}
+                        while(durationTo64(getNoteLyrics(cursor,lyricsLineNum).lyricTicks) == 0) {cursor.prev();}
                         curScore.startCmd();
                             console.log("addSynalepha(): Note inside a melisma line detected, character to be added at the begining of melisma line: " + character);
-                            var concatenated = cursor.element.lyrics[0].text + character;
-                            cursor.element.lyrics[0].text = concatenated;
+                            var concatenated = getNoteLyrics(cursor,lyricsLineNum).text + character;
+                            getNoteLyrics(cursor,lyricsLineNum).text = concatenated;
                             pushToUndoStack(cursor, "addSynalepha()");
                             nextChar();
                             updateDisplay();
@@ -659,7 +671,7 @@ MuseScore
                         curScore.startCmd();
                             curScore.selection.select(cursor.element.notes[0].firstTiedNote);
                             cursor = getSelectedCursor();
-                            if(cursor.element.lyrics.length == 0)
+                            if(!getNoteLyrics(cursor,lyricsLineNum))
                             {
                                 console.log("addSynalepha(): Note inside a tie detected, character to be dumped at the begining of the tie: " + character);
                                 var fill = newElement(Element.LYRICS);
@@ -670,8 +682,8 @@ MuseScore
                             else
                             {
                                 console.log("addSynalepha(): Note inside a tie detected, character to be added at the begining of the tie: " + character);
-                                var concatenated = cursor.element.lyrics[0].text + character;
-                                cursor.element.lyrics[0].text = concatenated;
+                                var concatenated = getNoteLyrics(cursor,lyricsLineNum).text + character;
+                                getNoteLyrics(cursor,lyricsLineNum).text = concatenated;
                             }
                             nextChar();
                             updateDisplay();
@@ -724,7 +736,7 @@ MuseScore
         if((lrcCursor.length == 2) && cursor)
         {
             var hyphenationNum = findhyphenationNum();
-            cursor.element.lyrics[0].syllabic = hyphenationNum;
+            getNoteLyrics(cursor,lyricsLineNum).syllabic = hyphenationNum;
         }
     }
 
@@ -738,8 +750,8 @@ MuseScore
             if(cursor.element == null) return false;
             if(cursor.element.type != 93) return false;
             checkLength += durationTo64(cursor.element.duration);
-        } while(cursor.element.lyrics.length == 0)
-        var melismaLength = durationTo64(cursor.element.lyrics[0].lyricTicks)
+        } while(!getNoteLyrics(cursor,lyricsLineNum))
+        var melismaLength = durationTo64(getNoteLyrics(cursor,lyricsLineNum).lyricTicks)
         if(melismaLength == 0) return false;
         if(melismaLength < checkLength) return false;
         return true;
@@ -967,7 +979,7 @@ MuseScore
             var tempTick = cursor.tick;
             undo_stack.push(getSelectedCursor().tick);
             cursor.rewindToTick(tempTick);
-            undo_stack.push(cursor.element.lyrics[0].text);
+            undo_stack.push(getNoteLyrics(cursor,lyricsLineNum).text);
             undo_stack.push(lrcCursor);
         }
         else 
@@ -1202,6 +1214,20 @@ MuseScore
                     if(buttonOpenFile.text == "...") openLrcDialog.open();
                     if(buttonOpenFile.text == "⚙") settingsPopup.open();
                 }
+            }
+        }
+        Grid
+        {
+            id: lyricsLineNumIndicator
+            columns: 1; rows: 1; visible: false;
+            Text
+            {
+                width: inputButtons.width
+                height: inputButtons.height / 2
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                text: "Lyrics Verse Line: " + String(lyricsLineNum+1)
+                color: "dimgrey"
             }
         }
         Grid
@@ -1492,6 +1518,30 @@ MuseScore
             font.pointSize: lrcDisplay.font.pointSize
         }
     }
+
+    MouseArea
+    {
+        id: lyricsLineNumSelection
+        x: inputButtons.x; y: inputButtons.y; height: inputButtons.height; width: inputButtons.width;
+        acceptedButtons: Qt.MiddleButton //only accepts wheel and wheel button
+        property var wheelIncrement: 0;
+        onWheel:
+        {
+            if (!(wheel.modifiers & Qt.ControlModifier) && inputButtons.enabled)
+            {
+                if((lyricsLineNum < 11 || wheel.angleDelta.y < 0) && (lyricsLineNum > 0 || wheel.angleDelta.y > 0))
+                {
+                     wheelIncrement += (wheel.angleDelta.y / 360); //makes mouse scorlling 3 steps as the minimum unit
+                     if(Math.floor(wheelIncrement) >= 1 || Math.ceil(wheelIncrement) <= -1)
+                     {
+                        lyricsLineNum += 1* Math.sign(wheelIncrement);
+                        wheelIncrement = 0;
+                        lyricsLineNumIndicator.visible = true;
+                     }
+                }
+            }
+        }
+    }
     
     MouseArea
     {   //Right Button Menu for lrcDisplayScrollView. This MouseArea is outside of the main Column because 
@@ -1517,7 +1567,7 @@ MuseScore
         }
         property var wheelIncrement: 0;
         property var maxPointSize: (Qt.platform.os == "osx") ? 17 : 12;
-        property var minPointSize: (Qt.platform.os == "osx") ? 14 : 9;
+        property var minPointSize: (Qt.platform.os == "windows") ? 14 : 9;
         onWheel:
         { //Ctrl + Mouse Scroll to zoom in&out the lyrics display
             if ((wheel.modifiers & Qt.ControlModifier) && inputButtons.enabled)
@@ -1527,7 +1577,7 @@ MuseScore
                      wheelIncrement += (wheel.angleDelta.y / 360); //makes mouse scorlling 3 steps as the minimum unit
                      if(Math.floor(wheelIncrement) >= 1 || Math.ceil(wheelIncrement) <= -1)
                      {
-                        lrcDisplay.font.pointSize = lrcDisplay.font.pointSize + Math.floor(wheelIncrement);
+                        lrcDisplay.font.pointSize = lrcDisplay.font.pointSize + (1 * Math.sign(wheelIncrement));
                         getVerticalIncrement();
                         wheelIncrement = 0;
                      }
