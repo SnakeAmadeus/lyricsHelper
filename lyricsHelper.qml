@@ -51,6 +51,8 @@ MuseScore
     //decides which line of lyrics is going to input.
     property var lyricsLineNum: 0;
 
+    property var isFirstRun: true;
+
     onRun: {}
 
     FileIO 
@@ -118,6 +120,17 @@ MuseScore
         hyphenation.text = hyphenation.enabled ? hyphenation.deafultText : hyphenation.langNotFoundText;
         japaneseToKana.enabled = japaneseToKana.hasJapanese(lrc);
         japaneseToKana.text = japaneseToKana.enabled ? japaneseToKana.deafultText : japaneseToKana.langNotFoundText;
+        //if its plugin's first run, prompt user how to adjust lyics verse lines
+        if(isFirstRun) 
+        {
+            lyricsLineNumIndicatorGrid.visible = true; 
+            lyricsLineNumIndicator.tooltip = " (Scroll Mouse Here to Change)"
+            lyricsLineNumIndicator.downArrow = "▼ "; lyricsLineNumIndicator.upArrow = " ▲";
+            lyricsLineNumAdjust.updateLyricsLineDisplay();
+            lyricsLineNumScroll.enabled = true; lyricsLineNumAdjust.enabled = true;
+            lyricsLineNumIndicatorPrompt.start();
+            isFirstRun = false;
+        }
         //resize the panel
         controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplayScrollView.height;
         getVerticalIncrement();
@@ -142,7 +155,7 @@ MuseScore
         curScorePath = curScorePath.slice(8);
         lyricSource.horizontalAlignment = Text.AlignHCenter;
         lyricSource.text = qsTr("Auto Loading Lyrics...");
-        lyricSource.searchTxtDelayRunning.start();
+        searchTxtDelayRunning.start();
     }
     FileIO //FileIO stores the path of the current score
     {
@@ -784,6 +797,8 @@ MuseScore
 
     function convertLineBreak(x) { return x.replace(/\n/g, "<br />"); } //special thanks to @Jack-Works for wrapping linebreaks in HTML
 
+    function convertWhiteSpace(x) { return x.replace(/\s/g, "&nbsp;"); } //convert whitespaces in HTML &nbsp;
+
     function updateDisplay() //update display to lrcDisplay.text
     {
         if(isOnlyContainsSeparator()) {lrcDisplay.text = qsTr("Error: your lyrics file only contains whitespaces or separators like \'-\'!"); return false;}
@@ -1218,18 +1233,37 @@ MuseScore
         }
         Grid
         {
-            id: lyricsLineNumIndicator
+            id: lyricsLineNumIndicatorGrid
             columns: 1; rows: 1; visible: false;
             Text
             {
+                id: lyricsLineNumIndicator
                 width: inputButtons.width
                 height: inputButtons.height / 2
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                text: "Lyrics Verse Line: " + String(lyricsLineNum+1)
+                property var downArrow: convertWhiteSpace("▼          ")
+                property var upArrow: convertWhiteSpace("          ▲")
+                property var info: "Lyrics Verse Line: "
+                property var tooltip: ""
+                property var indication: [info, String(lyricsLineNum+1), tooltip]
+                property var indicationWithTooltips: [downArrow, info, String(lyricsLineNum+1), tooltip, upArrow]
                 color: "dimgrey"
+                Timer
+                {
+                    id: lyricsLineNumIndicatorPrompt
+                    repeat: false
+                    interval: 3000
+                    onTriggered: 
+                    {
+                        lyricsLineNumIndicator.tooltip = ""; 
+                        lyricsLineNumIndicator.downArrow = convertWhiteSpace("▼          "); lyricsLineNumIndicator.upArrow = convertWhiteSpace("          ▲");
+                        lyricsLineNumIndicator.text = lyricsLineNumIndicator.indication.join('');
+                    }
+                }
             }
         }
+
         Grid
         {
             id: inputButtons
@@ -1521,9 +1555,11 @@ MuseScore
 
     MouseArea
     {
-        id: lyricsLineNumSelection
-        x: inputButtons.x; y: inputButtons.y; height: inputButtons.height; width: inputButtons.width;
+        id: lyricsLineNumScroll
+        x: lyricsLineNumIndicatorGrid.x; y: lyricsLineNumIndicatorGrid.y; 
+        height: lyricsLineNumIndicatorGrid.height + inputButtons.height; width: lyricsLineNumIndicatorGrid.width + inputButtons.width;
         acceptedButtons: Qt.MiddleButton //only accepts wheel and wheel button
+        enabled: false;
         property var wheelIncrement: 0;
         onWheel:
         {
@@ -1536,13 +1572,62 @@ MuseScore
                      {
                         lyricsLineNum += 1* Math.sign(wheelIncrement);
                         wheelIncrement = 0;
-                        lyricsLineNumIndicator.visible = true;
+                        lyricsLineNumAdjust.updateLyricsLineDisplay();
                      }
                 }
             }
         }
     }
-    
+    MouseArea
+    {
+        id: lyricsLineNumAdjust
+        x: lyricsLineNumIndicatorGrid.x; y: lyricsLineNumIndicatorGrid.y; 
+        height: lyricsLineNumIndicatorGrid.height; width: lyricsLineNumIndicatorGrid.width;
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true;
+        enabled: false;
+        property var hovered: false;
+        function updateLyricsLineDisplay() 
+        { 
+            if(hovered) lyricsLineNumIndicator.text = lyricsLineNumIndicator.indicationWithTooltips.join(''); 
+            else lyricsLineNumIndicator.text = lyricsLineNumIndicator.indication.join(''); 
+        }
+        onEntered: {lyricsLineNumIndicator.text = "<font color=\"dimgrey\">" + lyricsLineNumIndicator.indicationWithTooltips.join('') + "</font>"; hovered = true;}
+        onExited: {lyricsLineNumIndicator.text = "<font color=\"dimgrey\">" + lyricsLineNumIndicator.indication.join('') + "</font>"; hovered = false;}
+        onPressed:
+        {
+            if(mouse.x < (lyricsLineNumIndicatorGrid.width / 2)) 
+            {
+                if(!lyricsLineNumIndicatorPrompt.running) lyricsLineNumIndicator.downArrow = "<font color=\"black\">" + convertWhiteSpace("▼          ") + "</font>";
+                updateLyricsLineDisplay();
+            }
+            if(mouse.x > (lyricsLineNumIndicatorGrid.width / 2)) 
+            {
+                if(!lyricsLineNumIndicatorPrompt.running) lyricsLineNumIndicator.upArrow = "<font color=\"black\">" + convertWhiteSpace("          ▲") + "</font>";
+                updateLyricsLineDisplay();
+            }
+        }
+        onReleased: 
+        {
+            if(mouse.x < (lyricsLineNumIndicatorGrid.width / 2)) 
+            {
+                if(!lyricsLineNumIndicatorPrompt.running) lyricsLineNumIndicator.downArrow = "<font color=\"dimgrey\">" + convertWhiteSpace("▼          ") + "</font>";
+                if(lyricsLineNum == 0) lyricsLineNum = 11;
+                else lyricsLineNum -= 1; 
+                updateLyricsLineDisplay();
+            }
+            if(mouse.x > (lyricsLineNumIndicatorGrid.width / 2)) 
+            {
+                if(!lyricsLineNumIndicatorPrompt.running) lyricsLineNumIndicator.upArrow = "<font color=\"dimgrey\">" + convertWhiteSpace("          ▲") + "</font>";
+                if(lyricsLineNum == 11) lyricsLineNum = 0;
+                else lyricsLineNum += 1; 
+                updateLyricsLineDisplay();
+            }
+            
+            
+        }
+    }
+
     MouseArea
     {   //Right Button Menu for lrcDisplayScrollView. This MouseArea is outside of the main Column because 
         //there're mouse events capturing conflicts between ScrollView & MouseArea objects
