@@ -124,7 +124,7 @@ MuseScore
         if(isFirstRun) 
         {
             lyricsLineNumIndicatorGrid.visible = true; 
-            lyricsLineNumIndicator.tooltip = " (Scroll Mouse Here to Change)"
+            lyricsLineNumIndicator.tooltip = qsTr(" (Scroll Mouse Here to Adjust)")
             lyricsLineNumIndicator.downArrow = "▼ "; lyricsLineNumIndicator.upArrow = " ▲";
             lyricsLineNumAdjust.updateLyricsLineDisplay();
             lyricsLineNumScroll.enabled = true; lyricsLineNumAdjust.enabled = true;
@@ -1244,7 +1244,7 @@ MuseScore
                 verticalAlignment: Text.AlignVCenter
                 property var downArrow: convertWhiteSpace("▼          ")
                 property var upArrow: convertWhiteSpace("          ▲")
-                property var info: "Lyrics Verse Line: "
+                property var info: qsTr("Lyrics Verse Line: ")
                 property var tooltip: ""
                 property var indication: [info, String(lyricsLineNum+1), tooltip]
                 property var indicationWithTooltips: [downArrow, info, String(lyricsLineNum+1), tooltip, upArrow]
@@ -1340,6 +1340,7 @@ MuseScore
                 enabled: true
                 visible: true
                 wrapMode: Text.WordWrap
+                textFormat: Text.RichText
                 width: lrcDisplayScrollView.width
                 MouseArea
                 {
@@ -1612,15 +1613,13 @@ MuseScore
             if(mouse.x < (lyricsLineNumIndicatorGrid.width / 2)) 
             {
                 if(!lyricsLineNumIndicatorPrompt.running) lyricsLineNumIndicator.downArrow = "<font color=\"dimgrey\">" + convertWhiteSpace("▼          ") + "</font>";
-                if(lyricsLineNum == 0) lyricsLineNum = 11;
-                else lyricsLineNum -= 1; 
+                if(lyricsLineNum > 0)lyricsLineNum -= 1; 
                 updateLyricsLineDisplay();
             }
             if(mouse.x > (lyricsLineNumIndicatorGrid.width / 2)) 
             {
                 if(!lyricsLineNumIndicatorPrompt.running) lyricsLineNumIndicator.upArrow = "<font color=\"dimgrey\">" + convertWhiteSpace("          ▲") + "</font>";
-                if(lyricsLineNum == 11) lyricsLineNum = 0;
-                else lyricsLineNum += 1; 
+                if(lyricsLineNum < 11) lyricsLineNum += 1; 
                 updateLyricsLineDisplay();
             }
             
@@ -1887,7 +1886,7 @@ MuseScore
         }
     }
 
-    //Button{id: testBTN; text: "test!"; onClicked: {console.log();} }
+    //Button {id: testBTN; text: "test!"; onClicked: {console.log();} }
 
     //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
     //such as English Hyphenation and Japanese Kanji to Kana
