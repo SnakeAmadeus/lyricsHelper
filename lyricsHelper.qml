@@ -33,6 +33,8 @@ MuseScore
     property alias previewSoundMode: previewSoundModeCheckBox.checked;
     //@maximumUndoStep decides the max amount of actions that is done by lyricsHelper can be undone. default = 50
     property alias maximumUndoSteps: maximumUndoStepsSpinBox.value;
+    //@skipTiedNotesMode decides whether the cursor advancing while inputing lyrics treat tied notes as one note or multiple notes. default = false
+    property alias skipTiedNotesMode: skipTiedNotesModeCheckBox.checked;
 
     property var lrc: String("");
     property var lrcCursor: [0];
@@ -414,7 +416,7 @@ MuseScore
                     }
                 }
                 cursor.rewindToTick(tempTick);
-                if(cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) //if selected note is inside a tie, jump to the begining of the tie
+                if((cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) && skipTiedNotesMode) //if selected note is inside a tie, jump to the begining of the tie
                 {
                     curScore.selection.select(cursor.element.notes[0].firstTiedNote);
                     cursor = getSelectedCursor();
@@ -448,7 +450,7 @@ MuseScore
                 }
                 var nextNote = cursor.element.notes[0];
                 //if the next note is a tied note
-                if(nextNote.tieBack != null)
+                if((nextNote.tieBack != null) && skipTiedNotesMode)
                 {
                     curScore.selection.select(nextNote.lastTiedNote);
                     console.log("addSyllable(): Tied Note detected, move to tied note's tail at " + cursor.tick);
@@ -508,8 +510,9 @@ MuseScore
             var endHasLyrics = getNoteLyrics(cursor,lyricsLineNum);
             var melismaLength = 0;
             //things need to be checked for the current selected note to avoid glitches
+            //if the skipTiedNotesMode is ON, then:
             //check if the selected note is in the middle of the tie that has lyric on the first tied note, it will be meaningless to add melisma in this case
-            if(cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) 
+            if((cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) && skipTiedNotesMode)
             {
                 curScore.selection.select(cursor.element.notes[0].firstTiedNote);
                 cursor = getSelectedCursor();
@@ -679,7 +682,7 @@ MuseScore
                     }
                     //if that note is inside a tied note, dump the character to the begining of the tie
                     cursor.rewindToTick(tempTick2);
-                    if(cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) 
+                    if((cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) && skipTiedNotesMode)
                     {
                         curScore.startCmd();
                             curScore.selection.select(cursor.element.notes[0].firstTiedNote);
@@ -1152,8 +1155,8 @@ MuseScore
                     {   
                         if(mouse.button == Qt.RightButton) buttonOpenFile.text = "⚙"; 
                         if(mouse.button == Qt.LeftButton) buttonOpenFile.text = "..."; 
-                        var componentWidths = [previewSoundModeCheckBox.width, replaceModeCheckBox.width,
-                            settingsTitle.width, maximumUndoStepsSpinBoxTitle.width, maximumUndoStepsSpinBox.width ];
+                        var componentWidths = [previewSoundModeCheckBox.width, replaceModeCheckBox.width, skipTiedNotesModeCheckBox.width,
+                            settingsTitle.width, maximumUndoStepsSpinBoxTitle.width, maximumUndoStepsSpinBox.width];
                         settingsPopup.width = Math.max.apply(Math, componentWidths) + 30; //resize settingPopup's width depends on diff. language's text length.
                         settingsOverlayColor.opacity = 0.2;
                     }
@@ -1168,14 +1171,14 @@ MuseScore
                         x: -(settingsPopup.width)
                         y: -200
                         width: 215
-                        height: 250
+                        height: 295
                         modal: true
                         focus: true
                         Grid
                         {
                             id: settingsGrid
                             columns: 1
-                            rows: 6
+                            rows: 7
                             spacing: 5
                             Text 
                             { 
@@ -1190,6 +1193,10 @@ MuseScore
                                 id: previewSoundModeCheckBox
                                 checked: true;
                                 text: qsTr("🔊Preview Note Sounds")}
+                            CheckBox { 
+                                id: skipTiedNotesModeCheckBox
+                                checked: false;
+                                text: qsTr("Treat tied notes ♪͜  ♪\nas one note.")}
                             Text 
                             { 
                                 id: maximumUndoStepsSpinBoxTitle
@@ -1215,6 +1222,7 @@ MuseScore
                                     settingsPopup.close(); 
                                     console.log("replaceMode: " + replaceMode);
                                     console.log("previewSoundMode: " + previewSoundMode);
+                                    console.log("skipTiedNotesMode: " + skipTiedNotesMode);
                                     console.log("maximumUndoSteps: " + maximumUndoSteps);
                                     buttonOpenFile.text = "...";
                                     buttonOpenFile.ToolTip.delay = 2000;
@@ -1410,6 +1418,7 @@ MuseScore
                 interval: 10000
                 onTriggered: { 
                     hyphenation.request.abort();
+                    japaneseToKana.request.abort();
                     contentReqPopupText.text = qsTr("❌ Request timed out"); 
                     contentReqDelayMsg.start();
                 }
@@ -1590,11 +1599,11 @@ MuseScore
         property var hovered: false;
         function updateLyricsLineDisplay() 
         { 
-            if(hovered) lyricsLineNumIndicator.text = lyricsLineNumIndicator.indicationWithTooltips.join(''); 
-            else lyricsLineNumIndicator.text = lyricsLineNumIndicator.indication.join(''); 
+            if(hovered) lyricsLineNumIndicator.text = "<div>" + lyricsLineNumIndicator.indicationWithTooltips.join('') + "</div>"; 
+            else lyricsLineNumIndicator.text = "<div>" + lyricsLineNumIndicator.indication.join('') + "</div>"; 
         }
-        onEntered: {lyricsLineNumIndicator.text = "<font color=\"dimgrey\">" + lyricsLineNumIndicator.indicationWithTooltips.join('') + "</font>"; hovered = true;}
-        onExited: {lyricsLineNumIndicator.text = "<font color=\"dimgrey\">" + lyricsLineNumIndicator.indication.join('') + "</font>"; hovered = false;}
+        onEntered: {lyricsLineNumIndicator.text = "<div>" + lyricsLineNumIndicator.indicationWithTooltips.join('') + "</div>"; hovered = true;}
+        onExited: {lyricsLineNumIndicator.text = "<div>" + lyricsLineNumIndicator.indication.join('') + "</div>"; hovered = false;}
         onPressed:
         {
             if(mouse.x < (lyricsLineNumIndicatorGrid.width / 2)) 
@@ -1704,7 +1713,8 @@ MuseScore
                     lrcEdit.text = lrc;
                     lrcEdit.font.pointSize = lrcDisplay.font.pointSize;
                     lrcEditScrollView.ScrollBar.vertical.position = pos;
-                    //sync the cursor position in lrcEdit with lrcCursor position in the lrcDisplay
+                    //sync the cursor position in lrcEdit with lrcCursor position in the lrcDisplay.
+                    //reason: https://stackoverflow.com/questions/43487731/forceactivefocus-vs-focus-true-in-qml
                     lrcEdit.forceActiveFocus();
                     if(lrcCursorBackup.length == 1) lrcEdit.cursorPosition = lrcCursorBackup[0] + 1;
                     else if(lrcCursorBackup.length == 2) lrcEdit.cursorPosition = lrcCursorBackup[1];
