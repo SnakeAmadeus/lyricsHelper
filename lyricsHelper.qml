@@ -1408,8 +1408,8 @@ MuseScore
             {   
                 id: contentReqDelayMsg
                 repeat: false
-                interval: 1000
-                onTriggered: {contentReqPopup.close(); releaseUI();}
+                interval: 1500
+                onTriggered: {contentReqPopup.close(); contentReqDelayMsg.interval = 1000; releaseUI();}
             }
             Timer // in case of content quest out time, prompt failed message
             {   
@@ -1839,6 +1839,13 @@ MuseScore
                             }
                             console.log("response: " + response);
                             separator = [' '];
+                            if(!japaneseToKana.parseResponse(response)) 
+                            {
+                                contentReqPopupText.text = qsTr("❌ Error: lyrics got rejected by kuroshiro.org\nPossibly because of too much non-Japanese characters"); 
+                                contentReqDelayMsg.interval = 2500;
+                                contentReqDelayMsg.start();
+                                return;
+                            }
                             acceptLyrics(japaneseToKana.parseResponse(response)); inputButtons.enabled = false; //avoid misclicking before popup's gone
                             revertJPconv.enabled = true;
                             contentReqPopupText.text = qsTr("✔ Convertion Completed!");
@@ -1909,6 +1916,8 @@ MuseScore
         buttonOpenFile.enabled = false;
         autoReadLyricsMouseArea.enabled = false
         lrcDisplayMouseArea.enabled = false;
+        lyricsLineNumScroll.enabled = false;
+        lyricsLineNumAdjust.enabled = false;
     }
     function releaseUI()
     {
@@ -1918,6 +1927,8 @@ MuseScore
         buttonOpenFile.enabled = true;
         autoReadLyricsMouseArea.enabled =true;
         lrcDisplayMouseArea.enabled = true;
+        lyricsLineNumScroll.enabled = true;
+        lyricsLineNumAdjust.enabled = true;
     }
 
     Shortcut //addSyllable() shortcut
