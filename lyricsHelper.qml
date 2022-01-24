@@ -1794,8 +1794,12 @@ MuseScore
                                 return;
                             }
                             console.log("response : " + hyphenation.parseResponse(response));
+                            var relativeLrcCursorPos = (lrcCursor[0]/lrc.length); //preserve lrcCursor's position before the conversion
                             acceptLyrics(hyphenation.parseResponse(response)); inputButtons.enabled = false; //avoid misclicking before popup's gone
                             contentReqPopupText.text = qsTr("✔ Hyphenation Completed!");
+                            //restore lrcCursor's position:
+                            lrcCursor[0] = Math.floor(lrc.length * relativeLrcCursorPos); 
+                            if(hyphenatedMode) {expandCharToWord(lrcCursor[0]); updateDisplay();}
                             hyphenatedModeToggle.toggleHyphenatedModeON();
                             contentReqDelayMsg.start();
                         }
