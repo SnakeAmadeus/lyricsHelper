@@ -1,6 +1,6 @@
 # lyricsHelper
 ## (English) Introduction:
-A Musescore(3.5) plugin intends to help input lyrics. It is initially designed for East Asian languages (monosyllabic languages like Sino-Tibetian languages) but now also work for English with built-in Hyphenation API.
+A Musescore(3.5) plugin intends to help input lyrics. It is initially designed for East Asian languages (monosyllabic languages like Mandarin and Cantonese) but now also work for English with built-in Hyphenation API.
 
 ### Installation:
 1. Download then put the entire repository (lyricsHelper-main\) under `%USER%\Documents\MuseScore 3\Plugins\`
