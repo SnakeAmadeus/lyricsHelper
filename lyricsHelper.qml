@@ -60,7 +60,7 @@ MuseScore
     FileIO 
     {
         id: myFileLyrics
-        onError: console.log(msg + "  Filename = " + myFileLyrics.source);
+        onError: console.log("Failed to read lyrics file: " + myFileLyrics.source);
     }
 
     FileDialog 
@@ -135,7 +135,10 @@ MuseScore
         }
         //resize the panel
         controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplayScrollView.height;
+        //clean vertical increment cache
+        verticalIncrementsCache = [];
         getVerticalIncrement();
+        //clean undo stack
         undo_stack = [];
     }
 
@@ -162,7 +165,7 @@ MuseScore
     FileIO //FileIO stores the path of the current score
     {
         id: myFileScore
-        onError: console.log(msg + "  Filename = " + myFileScore.source);
+        onError: console.log("Failed to read Score: " + myFileScore.source);
     }
     FolderListModel //FolderListModel assists autoLoadLyrics() to search .txt files in the specified folder
     {
@@ -183,7 +186,7 @@ MuseScore
     
     //Functionality: Drag&Drop lyrics text file to the plugin
     //workarounds for DropArea validates file extensions because the DropArea.keys were not functioning properly
-    //Special Thanks to https://stackoverflow.com/a/28800328
+    //Reference: https://stackoverflow.com/a/28800328
     MouseArea 
     { 
         anchors.fill: controls
@@ -507,11 +510,10 @@ MuseScore
             //So the calculation rule of the length of Melisma line will be from the selected note to the last note that has lyrics under it.
             //Move the cursor backward, Add up the note value of [start note, end note); if rests are other wack occurred, abort the operation.
             var tempTick = cursor.tick; //backup cursor's original position
-            var endHasLyrics = getNoteLyrics(cursor,lyricsLineNum);
             var melismaLength = 0;
             //things need to be checked for the current selected note to avoid glitches
             //if the skipTiedNotesMode is ON, then:
-            //check if the selected note is in the middle of the tie that has lyric on the first tied note, it will be meaningless to add melisma in this case
+            //check if the selected note is in the middle of the tie that has lyric on the first tied note, give users the option to decide whether treat tied notes as one note or not
             if((cursor.element.notes[0].tieBack != null || cursor.element.notes[0].tieForward != null) && skipTiedNotesMode)
             {
                 curScore.selection.select(cursor.element.notes[0].firstTiedNote);
@@ -548,10 +550,6 @@ MuseScore
             if(cursor.element.type == 25) //if the prev element is a rest.
             {
                 console.log("addMelisma(): Rest detected, do nothing"); return false;
-            }
-            if(getNoteLyrics(cursor,lyricsLineNum) && endHasLyrics)//if the prev note has lyrics AND the selected note also has, adding melisma line will be notationally meaningless, abort the operation
-            {
-                console.log("addMelisma(): Current note and prev note have lyrics back to back detected, do nothing"); return false;
             }
             cursor.next(); //finish checking
             //Start searching for the last note that has lyrics
@@ -884,25 +882,26 @@ MuseScore
             expandCharToWord(getNextAvailableCharPos(lrcCursor[0], -1));
     }
 
-    //verticalIncrements and separatorIncrement indicate how many pixels of a line & a whitespace (or other separators) on user's deivce screen.
+    //verticalIncrements and separatorIncrements indicate how many pixels of a line & a whitespace (or other separators) on user's deivce screen.
     //use getVerticalIncrement() to forcefully resize the invisible lrcDisplayDummy and use its width to store the pixel line height increments
     //This is a very cheesy solution but worked pretty well.
-    property var separatorIncrement: [];
+    property var separatorIncrements: [];
     property var newlinePositions: [0]; 
     property var verticalIncrements: [];
+    property var verticalIncrementsCache: []; //use cache to prevent the lag
     function getVerticalIncrement() 
-    {   //use @separatorIncrement to store the horizontal lengths (in pixel) of each separators
-        separatorIncrement = [];
+    {   //use @separatorIncrements to store the horizontal lengths (in pixel) of each separators
+        separatorIncrements = [];
         lrcDisplayDummyWrapped.text = convertLineBreak("1");
         for(var i = 0; i < separator.length; i++)
         {
             lrcDisplayDummyWrapped.text = convertLineBreak("1");
             var before = lrcDisplayDummyWrapped.width;
             lrcDisplayDummyWrapped.text = convertLineBreak("1" + separator[i]);
-            separatorIncrement.push(lrcDisplayDummyWrapped.width - before);
+            separatorIncrements.push(lrcDisplayDummyWrapped.width - before);
         }
-        console.log("Current separators: " + separator + ". separatorIncrement: " + separatorIncrement);
-        //Start record each newline's height and the start index of the newlines. Put them into @verticalIncrements and @newlinePositions for findChar()
+        console.log("Current separators: " + separator + ". separatorIncrements: " + separatorIncrements);
+        //Start record each line's height and the start index of the newlines. Put them into @verticalIncrements and @newlinePositions for findChar()
         verticalIncrements = []; newlinePositions = [];
         for(var i = 0, j = 0; i < lrc.length; i++)
         {
@@ -940,6 +939,19 @@ MuseScore
         }
         console.log("verticalIncrements: " + verticalIncrements);
         console.log("newlinePositions: " + newlinePositions);
+        //cache the vertical increment for later use
+        storeVerticalIncrementCache(lrcDisplay.font.pointSize);
+    }
+    function storeVerticalIncrementCache(i) //helper function that stores the vertical increments of specific font point size
+    {
+        var distance = i - (verticalIncrementsCache.length - 1);
+        if(distance > 0) for(var j = 0; j < distance; j++) verticalIncrementsCache.push(false); 
+        verticalIncrementsCache[i] = [separatorIncrements, verticalIncrements];
+    }
+    function retrieveVerticalIncrementCache(i) //helper function that retrieves the vertical increments of specific font point size
+    {
+        separatorIncrements = verticalIncrementsCache[i][0];
+        verticalIncrements = verticalIncrementsCache[i][1];
     }
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
@@ -973,7 +985,7 @@ MuseScore
                     if(lrc.charAt(i-1) == '\n' && lrc.charAt(i+1) != '\n' ) return getNextAvailableCharPos(i, 1);
                     if(lrc.charAt(i-1) != '\n' && lrc.charAt(i+1) == '\n' ) return getNextAvailableCharPos(i, -1);
                     //snap to the nearest character (use prevChar() and nextChar() to also skip all the nearest whitespaces)
-                    if(posX - (lrcDisplayDummy.width - separatorIncrement[parseInt(isSeparator(lrc.charAt(i)))]) < lrcDisplayDummy.width - posX)
+                    if(posX - (lrcDisplayDummy.width - separatorIncrements[parseInt(isSeparator(lrc.charAt(i)))]) < lrcDisplayDummy.width - posX)
                         return getNextAvailableCharPos(i, -1);
                     else
                         return getNextAvailableCharPos(i, 1);
@@ -1096,7 +1108,7 @@ MuseScore
             {
                 id: lyricSource
                 height: parent.height
-                width: inputButtons.width - (syllableButton.width/4)
+                width: inputButtons.width - (syllableButton.width/3.75) - 2
                 wrapMode: Text.WrapAnywhere
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignRight
@@ -1132,7 +1144,7 @@ MuseScore
             Button 
             {
                 id : buttonOpenFile
-                width: syllableButton.width/4
+                width: syllableButton.width/3.75
                 text: "..."
                 hoverEnabled: true
                 ToolTip.delay: 250
@@ -1196,9 +1208,9 @@ MuseScore
                             CheckBox { 
                                 id: skipTiedNotesModeCheckBox
                                 checked: false;
-                                text: qsTr("Treat tied notes ♪͜  ♪\nas one note.")}
-                            Text 
-                            { 
+                                readonly property var tiedSymbol: "{\"windows\" : \"♪͜  ♪\", \"osx\" : \"♪͜ ♪\"}"
+                                text: (qsTr("Treat tied notes ") + JSON.parse(tiedSymbol)[Qt.platform.os] + qsTr("\nas one note"))}
+                            Text { 
                                 id: maximumUndoStepsSpinBoxTitle
                                 text: qsTr("Maximum Undo Steps:") 
                             }
@@ -1240,7 +1252,7 @@ MuseScore
             }
         }
         Grid
-        {
+        {//For the MouseArea for this grid, see @lyricsLineNumAdjust and @lyricsLineNumScroll
             id: lyricsLineNumIndicatorGrid
             columns: 1; rows: 1; visible: false;
             Text
@@ -1659,8 +1671,8 @@ MuseScore
             }
         }
         property var wheelIncrement: 0;
-        property var maxPointSize: (Qt.platform.os == "osx") ? 17 : 12;
-        property var minPointSize: (Qt.platform.os == "windows") ? 14 : 9;
+        property var maxPointSize: (Qt.platform.os == "windows") ? 14 : 17;
+        property var minPointSize: (Qt.platform.os == "windows") ? 9 : 12;
         onWheel:
         { //Ctrl + Mouse Scroll to zoom in&out the lyrics display
             if ((wheel.modifiers & Qt.ControlModifier) && inputButtons.enabled)
@@ -1671,20 +1683,14 @@ MuseScore
                      if(Math.floor(wheelIncrement) >= 1 || Math.ceil(wheelIncrement) <= -1)
                      {
                         lrcDisplay.font.pointSize = lrcDisplay.font.pointSize + (1 * Math.sign(wheelIncrement));
-                        getVerticalIncrement();
+                        //if pointSize's vertical increment not found in the cache, save one otherwise just retrieve it
+                        if(verticalIncrementsCache[lrcDisplay.font.pointSize]) retrieveVerticalIncrementCache(lrcDisplay.font.pointSize);
+                        else getVerticalIncrement();
                         wheelIncrement = 0;
                      }
                 } wheel.accepted=true;
             } 
             else wheel.accepted=false; //aviod conflicts between MouseArea's onWheel and scrollView's scrolling
-        }
-        Shortcut //Reset lrcDisplay's font size to its default (9)
-        {
-            id: resetLrcDisplaySize
-            enabled: inputButtons.enabled
-            sequence: "Alt+0"
-            context: Qt.ApplicationShortcut
-            onActivated: {lrcDisplay.font.pointSize = 9; lrcDisplayMenuMouseArea.wheelIncrement = 0; getVerticalIncrement();}
         }
         Menu
         {
@@ -1714,7 +1720,7 @@ MuseScore
                     lrcEdit.font.pointSize = lrcDisplay.font.pointSize;
                     lrcEditScrollView.ScrollBar.vertical.position = pos;
                     //sync the cursor position in lrcEdit with lrcCursor position in the lrcDisplay.
-                    //reason: https://stackoverflow.com/questions/43487731/forceactivefocus-vs-focus-true-in-qml
+                    //https://stackoverflow.com/questions/43487731/forceactivefocus-vs-focus-true-in-qml
                     lrcEdit.forceActiveFocus();
                     if(lrcCursorBackup.length == 1) lrcEdit.cursorPosition = lrcCursorBackup[0] + 1;
                     else if(lrcCursorBackup.length == 2) lrcEdit.cursorPosition = lrcCursorBackup[1];
