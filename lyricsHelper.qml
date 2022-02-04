@@ -888,7 +888,7 @@ MuseScore
     property var separatorIncrements: [];
     property var newlinePositions: [0]; 
     property var verticalIncrements: [];
-    property var verticalIncrementsCache: []; //use cache to prevent the lag
+    property var verticalIncrementsCache: {"fontSize" : "verticalIncrements"}; //use cache to prevent the lag
     function getVerticalIncrement() 
     {   //use @separatorIncrements to store the horizontal lengths (in pixel) of each separators
         separatorIncrements = [];
@@ -916,12 +916,14 @@ MuseScore
                     lrcDisplayDummyWrapped.text = "";
                     //Text's Text.wrapMode wraps the line by word's boundries. so first get newline's list of words:
                     var wordlist = lrc.substring(j,i).replace(/\s+$/gm, ' ').split(' '); 
+                    wordlist = seperateLatinAndNonLatin(wordlist); //separate all the non-latin characters in the wordlist as single word
                     for(var k = 0, indexOfk = j; k < wordlist.length; k++)
                     {
                         height = lrcDisplayDummyWrapped.height;
                         //fill in lrcDisplayDummyWrapped one word by one, force its width increases, until the line wrapping happens
-                        lrcDisplayDummyWrapped.text = convertLineBreak(lrcDisplayDummyWrapped.text + String(wordlist[k]).replace(/\s+$/gm, ' ') + ' '); 
-                        if(lrcDisplayDummyWrapped.height > height) 
+                        lrcDisplayDummyWrapped.text = convertLineBreak(lrcDisplayDummyWrapped.text + String(wordlist[k]).replace(/\s+$/gm, ' ')); 
+                        
+                        if(lrcDisplayDummyWrapped.height > height && lrcDisplayDummyWrapped.height - height >= 14) 
                         {//find the word that causes wrapping behavior, chop all previous words and put them in the records,
                          //and start filling lrcDisplayDummyWrapped again from that word
                             newlinePositions.push(indexOfk)
@@ -930,7 +932,7 @@ MuseScore
                             lrcDisplayDummyWrapped.text = convertLineBreak(String(wordlist[k]).replace(/\s+$/gm, ' '));
                             height = lrcDisplayDummyWrapped.height;
                         }
-                        indexOfk += wordlist[k].length + 1; //update the word's starting character's index
+                        indexOfk += wordlist[k].length; //update the word's starting character's index
                     }
                     verticalIncrements.push(lrcDisplayDummyWrapped.height);
                 } else verticalIncrements.push(height); //if no wrapping happens
@@ -939,19 +941,38 @@ MuseScore
         }
         console.log("verticalIncrements: " + verticalIncrements);
         console.log("newlinePositions: " + newlinePositions);
+        for(var i = 1; i < newlinePositions.length; i++) console.log("line: " + i + "；content: \""+ lrc.substring(newlinePositions[i-1],newlinePositions[i]) + "\"");
         //cache the vertical increment for later use
-        storeVerticalIncrementCache(lrcDisplay.font.pointSize);
+        verticalIncrementsCache[lrcDisplay.font.pointSize] = [separatorIncrements, verticalIncrements];
     }
-    function storeVerticalIncrementCache(i) //helper function that stores the vertical increments of specific font point size
+    function hasNonLatinChar(s) { return /^[A-z\u00C0-\u00ff]+$/.test(s); }
+    function hasOnlyLatinChar(s) { return /[A-z\u00C0-\u00ff]+$/.test(s); }
+    function seperateLatinAndNonLatin(wordlist) //helper function that 
     {
-        var distance = i - (verticalIncrementsCache.length - 1);
-        if(distance > 0) for(var j = 0; j < distance; j++) verticalIncrementsCache.push(false); 
-        verticalIncrementsCache[i] = [separatorIncrements, verticalIncrements];
+        var separated = [];
+        for(var i = 0; i < wordlist.length; i++)
+            if(!(hasNonLatinChar(wordlist[i]))) //if the word contains non-Latin letters
+                for(var j = 0; j < wordlist[i].length; j++) 
+                {   //if the character is non-latin letters, identify this character as a single word.
+                    if(!(hasOnlyLatinChar(wordlist[i].charAt(j)))) 
+                        separated.push(wordlist[i].charAt(j));
+                    else //if the character is latin letters, check if the last pushed word is latin letters only
+                    {
+                        if(separated.length != 0) 
+                        {
+                            if(!(hasOnlyLatinChar(separated[separated.length-1]))) separated.push(wordlist[i].charAt(j)); //if yes, concatenate
+                            else separated[separated.length - 1] = separated[separated.length - 1] + wordlist[i].charAt(j); //if not, identify as a single word.
+                        }
+                    }
+                }
+            else separated.push(wordlist[i]);
+            if(i != wordlist.length - 1) separated.push(' '); //save whitespace's position so we can perfectly replay the wrapping process
+        return separated;
     }
-    function retrieveVerticalIncrementCache(i) //helper function that retrieves the vertical increments of specific font point size
+    function retrieveVerticalIncrementCache(pointSize) //helper function that retrieves the vertical increments of specific font point size
     {
-        separatorIncrements = verticalIncrementsCache[i][0];
-        verticalIncrements = verticalIncrementsCache[i][1];
+        separatorIncrements = verticalIncrementsCache[pointSize][0];
+        verticalIncrements = verticalIncrementsCache[pointSize][1];
     }
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
@@ -965,7 +986,7 @@ MuseScore
             if(sum > posY) {targetRowPos = newlinePositions[i]; targetRow = i; found = true; /*found mark*/ break;}
         }
         if(!found) targetRowPos = newlinePositions[verticalIncrements.length]; //if user click is the EOF empty line
-        
+
         lrcDisplayDummy.text = ""; 
         for(var i = targetRowPos; i < lrc.length; i++)
         {
@@ -974,6 +995,7 @@ MuseScore
             //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap trailing whitespaces here:
             lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(lrc.charAt(i))).replace(/\s+$/gm, ' '); 
             if(lrcDisplayDummy.text.startsWith("<br />")) lrcDisplayDummy.text = lrcDisplayDummy.text.substring(6);
+            if(lrcDisplayDummy.text == "") return -1; //if empty line then directly return not found.
             //console.log("buffered text: " + lrcDisplayDummy.text)
             if(posX < lrcDisplayDummy.width) 
             {
@@ -991,8 +1013,8 @@ MuseScore
                         return getNextAvailableCharPos(i, 1);
                 }    
                 return i;
-            }
-            if(i == lrc.length - 1 || lrc.charAt(i+1) == '\n') return -1; //if reach the EOF or not found a character in the given X position before going to next line
+            } //if reach the EOF or not found a character in the given X position before going to next line:
+            if(i == lrc.length - 1 || lrc.charAt(i+1) == '\n' || i == newlinePositions[targetRow+1]) return -1; 
         }
         return -1;
     }
@@ -1208,8 +1230,8 @@ MuseScore
                             CheckBox { 
                                 id: skipTiedNotesModeCheckBox
                                 checked: false;
-                                readonly property var tiedSymbol: "{\"windows\" : \"♪͜  ♪\", \"osx\" : \"♪͜ ♪\"}"
-                                text: (qsTr("Treat tied notes ") + JSON.parse(tiedSymbol)[Qt.platform.os] + qsTr("\nas one note"))}
+                                readonly property var tiedSymbol: {"windows" : "♪͜  ♪", "osx" : "♪͜ ♪"}
+                                text: (qsTr("Treat tied notes ") + tiedSymbol[Qt.platform.os] + qsTr("\nas one note"))}
                             Text { 
                                 id: maximumUndoStepsSpinBoxTitle
                                 text: qsTr("Maximum Undo Steps:") 
@@ -1671,8 +1693,8 @@ MuseScore
             }
         }
         property var wheelIncrement: 0;
-        property var maxPointSize: (Qt.platform.os == "windows") ? 14 : 17;
-        property var minPointSize: (Qt.platform.os == "windows") ? 9 : 12;
+        property var maxPointSize: {"windows" : 14, "osx" : 17}[Qt.platform.os]
+        property var minPointSize: {"windows" : 9, "osx" : 12}[Qt.platform.os]
         onWheel:
         { //Ctrl + Mouse Scroll to zoom in&out the lyrics display
             if ((wheel.modifiers & Qt.ControlModifier) && inputButtons.enabled)
