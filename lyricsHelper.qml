@@ -107,10 +107,12 @@ MuseScore
             if(japaneseToKana.hasJapanese(lrc)) japaneseToKana.lrcBackup = lrc;
         }
     }
+    property var lrcOriginalCopy: "";
     function acceptLyrics(text)
     {
-        lrc = text;
-        lrcDisplay.text = text; //update lyrics text to displayer
+        //update lyrics text to the display:
+        lrc = text.replace(/\s+$/gm, ' '); lrcOriginalCopy = lrc;
+        lrcDisplay.text = lrc; 
         lrcDisplay.width = lrcDisplayScrollView.width;
         if(lrcCursor.length == 1) lrcCursor = [0]; else {lrcCursor = [0,1]; expandCharToWord(0);}//reset @lrcCursor
         prevChar(); nextChar(); //forcefully skip all the whitespaces in the file head.
@@ -136,7 +138,7 @@ MuseScore
         //resize the panel
         controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplayScrollView.height;
         //clean vertical increment cache
-        verticalIncrementsCache = [];
+        verticalIncrementsCache = {};
         getVerticalIncrement();
         //clean undo stack
         undo_stack = [];
@@ -324,7 +326,7 @@ MuseScore
        cursor.inputStateMode = 1;
        cursor.rewindToTick(getSelectedTicks()); //move cursor's to the ticks of selection.
        //console.log(cursor.tick);
-       return cursor;
+       return cursor;[
     }
 
     //helper function that returns a string of currently selected lyrics
@@ -892,50 +894,37 @@ MuseScore
     function getVerticalIncrement() 
     {   //use @separatorIncrements to store the horizontal lengths (in pixel) of each separators
         separatorIncrements = [];
-        lrcDisplayDummyWrapped.text = convertLineBreak("1");
+        lrcDisplayDummy.text = convertLineBreak("1");
         for(var i = 0; i < separator.length; i++)
         {
-            lrcDisplayDummyWrapped.text = convertLineBreak("1");
-            var before = lrcDisplayDummyWrapped.width;
-            lrcDisplayDummyWrapped.text = convertLineBreak("1" + separator[i]);
-            separatorIncrements.push(lrcDisplayDummyWrapped.width - before);
+            lrcDisplayDummy.text = convertLineBreak("1");
+            var before = lrcDisplayDummy.width;
+            lrcDisplayDummy.text = convertLineBreak("1" + separator[i] + "1");
+            separatorIncrements.push(lrcDisplayDummy.width - (2*before));
         }
         console.log("Current separators: " + separator + ". separatorIncrements: " + separatorIncrements);
         //Start record each line's height and the start index of the newlines. Put them into @verticalIncrements and @newlinePositions for findChar()
-        verticalIncrements = []; newlinePositions = [];
+        verticalIncrements = []; newlinePositions = []; lrc = lrcOriginalCopy;
         for(var i = 0, j = 0; i < lrc.length; i++)
         {
-            if (lrc.charAt(i) == '\n') //detects newline, start checking if the newline is wrapped
+            if (lrc.charAt(i) == '\n' || i == lrc.length - 1) //detects newline, start checking if the newline is wrapped
             {
-                newlinePositions.push(j);
-                lrcDisplayDummyWrapped.text = convertLineBreak(lrc.substring(j,i)); //lrcDisplayDummyWrapped is for detecting wrapping events
-                lrcDisplayDummy.text = convertLineBreak(lrc.substring(j,i)); //compare the heights of lrcDisplayDummy with lrcDisplayDummyWrapped to see if wrapping happens
-                var height = lrcDisplayDummy.height;
-                if(lrcDisplayDummyWrapped.height > lrcDisplayDummy.height) //check possible wrapped line
-                {//if a wrapped line was found, start calculating newline's wrapped contents, and record their vertical height like normal newlines
-                    lrcDisplayDummyWrapped.text = "";
-                    //Text's Text.wrapMode wraps the line by word's boundries. so first get newline's list of words:
-                    var wordlist = lrc.substring(j,i).replace(/\s+$/gm, ' ').split(' '); 
-                    wordlist = seperateLatinAndNonLatin(wordlist); //separate all the non-latin characters in the wordlist as single word
-                    for(var k = 0, indexOfk = j; k < wordlist.length; k++)
-                    {
-                        height = lrcDisplayDummyWrapped.height;
-                        //fill in lrcDisplayDummyWrapped one word by one, force its width increases, until the line wrapping happens
-                        lrcDisplayDummyWrapped.text = convertLineBreak(lrcDisplayDummyWrapped.text + String(wordlist[k]).replace(/\s+$/gm, ' ')); 
-                        
-                        if(lrcDisplayDummyWrapped.height > height && lrcDisplayDummyWrapped.height - height >= 14) 
-                        {//find the word that causes wrapping behavior, chop all previous words and put them in the records,
-                         //and start filling lrcDisplayDummyWrapped again from that word
-                            newlinePositions.push(indexOfk)
-                            verticalIncrements.push(height);
-                            console.log("wrapped point found! caused word: " + wordlist[k] + ", position at: " + indexOfk);
-                            lrcDisplayDummyWrapped.text = convertLineBreak(String(wordlist[k]).replace(/\s+$/gm, ' '));
-                            height = lrcDisplayDummyWrapped.height;
-                        }
-                        indexOfk += wordlist[k].length; //update the word's starting character's index
-                    }
-                    verticalIncrements.push(lrcDisplayDummyWrapped.height);
-                } else verticalIncrements.push(height); //if no wrapping happens
+                var l = lrc.substring(j,i);
+                lrcDisplayDummy.text = convertLineBreak(l);
+                if(lrcDisplayDummy.width > lrcDisplayScrollView.width) //check possible wrapped line
+                {
+                    l = lrcDisplay.wrap(l); //wrap it!
+                    lrc = lrc.substring(0, j) + l + lrc.substring(i);
+                    i = j; //rescan the wrapped line
+                    updateDisplay();
+                    continue;
+                } 
+                else //if no wrapping happens
+                {
+                    if(i == lrc.length - 1) break;
+                    newlinePositions.push(j);
+                    verticalIncrements.push(lrcDisplayDummy.height);
+                } 
                 j = i + 1;
             }
         }
@@ -943,14 +932,15 @@ MuseScore
         console.log("newlinePositions: " + newlinePositions);
         for(var i = 1; i < newlinePositions.length; i++) console.log("line: " + i + "；content: \""+ lrc.substring(newlinePositions[i-1],newlinePositions[i]) + "\"");
         //cache the vertical increment for later use
-        verticalIncrementsCache[lrcDisplay.font.pointSize] = [separatorIncrements, verticalIncrements];
+        verticalIncrementsCache[lrcDisplay.font.pointSize] = [separatorIncrements, verticalIncrements, newlinePositions, lrc];
     }
-    function hasNonLatinChar(s) { return /^[A-z\u00C0-\u00ff]+$/.test(s); }
-    function hasOnlyLatinChar(s) { return /[A-z\u00C0-\u00ff]+$/.test(s); }
-    function seperateLatinAndNonLatin(wordlist) //helper function that 
+    function hasNonLatinChar(s) { return /^[A-z\u00C0-\u00ff]|[,.\/#!$%\^&\*;:{}=\-_`~()]+$/.test(s); }
+    function hasOnlyLatinChar(s) { return /[A-z\u00C0-\u00ff]|[,.\/#!$%\^&\*;:{}=\-_`~()]+$/.test(s); }
+    function seperateLatinAndNonLatin(wordlist) //helper function that further separates the word wordlist into English words and non-English characters
     {
         var separated = [];
         for(var i = 0; i < wordlist.length; i++)
+        {
             if(!(hasNonLatinChar(wordlist[i]))) //if the word contains non-Latin letters
                 for(var j = 0; j < wordlist[i].length; j++) 
                 {   //if the character is non-latin letters, identify this character as a single word.
@@ -966,13 +956,17 @@ MuseScore
                     }
                 }
             else separated.push(wordlist[i]);
-            if(i != wordlist.length - 1) separated.push(' '); //save whitespace's position so we can perfectly replay the wrapping process
+            if(i != wordlist.length - 1) separated.push(" "); //save whitespace's position so we can perfectly replay the wrapping process
+        }
         return separated;
     }
     function retrieveVerticalIncrementCache(pointSize) //helper function that retrieves the vertical increments of specific font point size
     {
         separatorIncrements = verticalIncrementsCache[pointSize][0];
         verticalIncrements = verticalIncrementsCache[pointSize][1];
+        newlinePositions = verticalIncrementsCache[pointSize][2];
+        lrc = verticalIncrementsCache[pointSize][3];
+        updateDisplay();
     }
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
@@ -986,6 +980,7 @@ MuseScore
             if(sum > posY) {targetRowPos = newlinePositions[i]; targetRow = i; found = true; /*found mark*/ break;}
         }
         if(!found) targetRowPos = newlinePositions[verticalIncrements.length]; //if user click is the EOF empty line
+        console.log(targetRow);
 
         lrcDisplayDummy.text = ""; 
         for(var i = targetRowPos; i < lrc.length; i++)
@@ -1381,7 +1376,7 @@ MuseScore
                 text: qsTr("Please load a lyrics file first")
                 enabled: true
                 visible: true
-                wrapMode: Text.WordWrap
+                wrapMode: Text.NoWrap
                 textFormat: Text.RichText
                 width: lrcDisplayScrollView.width
                 MouseArea
@@ -1423,6 +1418,57 @@ MuseScore
                             doubleClickTimer.start();
                         }
                     }
+                }
+                //Customize the line wrapping strategy to gain full control of the starting position of the lines:
+                //strategy: wrap by word first, if the word is too long to wrap, then break it into multi lines.
+                function wrap(line)
+                {
+                    line = line.replace(/^[\n]+|[\n]+$/g, ""); //remove leading & trailing line feeds
+                    lrcDisplayDummy.text = "";
+                    var wordlist = line.replace(/\s+$/gm, ' ').split(' '); //split the line into words. so it won't get wrapped in the middle of the word.
+                    wordlist = seperateLatinAndNonLatin(wordlist); //separate all the non-latin characters in the wordlist as single word
+                    for(var k = 0, indexOfk = 0; k < wordlist.length; k++)
+                    {
+                        //fill in lrcDisplayDummy one word by one, force its width increases, until the line wrapping happens
+                        lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(wordlist[k]).replace(/\s+$/gm, ' ')); 
+                        
+                        if(lrcDisplayDummy.width > lrcDisplayScrollView.width) 
+                        {   //find the word that causes wrapping behavior, chop all previous words and put them in the records,
+                            //and start filling lrcDisplayDummy again from that word
+                            console.log("wrapped point found! caused word: " + wordlist[k] + ", position at: " + indexOfk);
+                            //if the word can single-handedly long enough to cause wrapping, forcefully break it
+                            lrcDisplayDummy.text = wordlist[k];
+                            function breakLongWord(w) //helper function that break super long words into multiple lines
+                            {   
+                                lrcDisplayDummy.text = "";
+                                for(var j = 0; j < w.length; j++) 
+                                {
+                                    lrcDisplayDummy.text += w.charAt(j);
+                                    if(lrcDisplayDummy.width > lrcDisplayScrollView.width) 
+                                    {
+                                        lrcDisplayDummy.text = w.charAt(j);
+                                        w = w.substring(0,j) + "\n" + w.substring(j); 
+                                        j += 1;
+                                    }
+                                }
+                                return w;
+                            }
+                            if(lrcDisplayDummy.width > lrcDisplayScrollView.width) 
+                            {
+                                wordlist[k] = breakLongWord(wordlist[k]); 
+                                //make the begining of super long word a line, as traditionally Qt does.
+                                if(k != 0) wordlist[k] = '\n' + wordlist[k]; 
+                                //update the line position for debugging.
+                                indexOfk += wordlist[k].length;
+                                continue;
+                            }
+                            //reset the lrcDisplayDummy to the new line content;
+                            lrcDisplayDummy.text = convertLineBreak(String(wordlist[k]).replace(/\s+$/gm, ' '));
+                            if(k != 0) wordlist[k] = '\n' + wordlist[k]; //wrap it!
+                        }
+                        indexOfk += wordlist[k].length; //update the word's starting character's index
+                    }
+                    return wordlist.join('');
                 }
             }
             Popup 
@@ -1582,16 +1628,6 @@ MuseScore
             id: lrcDisplayDummy
             visible: false
             text: "buffer text"
-            font.family: lrcDisplay.font.family
-            font.pointSize: lrcDisplay.font.pointSize
-        }
-        Text
-        {
-            id: lrcDisplayDummyWrapped
-            visible: false
-            wrapMode: lrcDisplay.wrapMode
-            width: lrcDisplayScrollView.width
-            text: "for line vertical increment calculation (because I need to know all the line wrappings, and lrcDisplayDummy is for horizontal position calculation so it cannot do wrappings)"
             font.family: lrcDisplay.font.family
             font.pointSize: lrcDisplay.font.pointSize
         }
@@ -1935,7 +1971,7 @@ MuseScore
         }
     }
 
-    //Button {id: testBTN; text: "test!"; onClicked: {console.log();} }
+    Button{id:testBTN; text: "test!"; onClicked:{console.log(JSON.stringify(verticalIncrementsCache));} }
 
     //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
     //such as English Hyphenation and Japanese Kanji to Kana
