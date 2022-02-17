@@ -44,7 +44,7 @@ MuseScore
     function lrcCursorParse(c) {if(c.split('-').length == 1) return [parseInt(c)]; else return [parseInt(c.split('-')[0]),parseInt(c.split('-')[1])];}
     //helper clone() that clones a copy of lrcCursor
     function lrcCursorClone(c) {return c.slice();}
-    //@ptSize is the alias of currently displayed lyrics' font size (in pt)
+    //@ptSize is the alias of currently displayed lyrics' font point size
     property alias ptSize: lrcDisplay.font.pointSize;
 
     //@hyphenatedMode decides whether the single unit of lyrics selection is between whitespaces or (whitespaces and hyphens.) default = false
@@ -113,14 +113,12 @@ MuseScore
     function acceptLyrics(text)
     {
         //update lyrics text to the display:
-        lrc = text.replace(/\s+$/gm, ' ');
+        lrc = text.replace(/\ /gm, ' ');
         lrcDisplay.wrap(); 
-        updateDisplay(); 
         lrcDisplay.width = lrcDisplayScrollView.width;
         if(lrcCursor.length == 1) lrcCursor = [0]; else {lrcCursor = [0,1]; expandCharToWord(0);}//reset @lrcCursor
         prevChar(); nextChar(); //forcefully skip all the whitespaces in the file head.
         inputButtons.enabled = true; //recover input buttons' availability
-        updateDisplay(); 
         
         texteditButtons.enableLrcDisplay();
         //check the language of lyrics, see if they are convertable in specific language.
@@ -146,6 +144,8 @@ MuseScore
         getDisplayPositionMap();
         //clean undo stack
         undo_stack = [];
+        
+        updateDisplay();
     }
 
     //Functionality: click on lyricSource to auto load a text file to the lyricsHelper
@@ -808,17 +808,19 @@ MuseScore
 
     function lrcCursorToWrappedLrcCursor(c)
     {
-        var wlc /*Wrapped lrcCursor*/ = 0;
-        for(var i = 0; i <= c[0]; wlc++) 
-            if(!(lrcDisplay.wrappedText.charAt(i) == '\n')) i++;
-        if(c.length == 1) return [wlc];
+        var wlc /*Wrapped lrcCursor*/ = 0; 
+        var numOfNonLineBreakChar = lrc.substring(0,c[0]+1).replace(/\n/g,"").length;
+        for(var i = 0; wlc < lrcDisplay.wrappedText.length; wlc++) 
+            if(lrcDisplay.wrappedText.substring(0,wlc+1).replace(/\n/g,"").length == numOfNonLineBreakChar) break;
+        if(c.length == 1) return [wlc]; 
         else if(c.length == 2) return [wlc, wlc + (c[1] - c[0])];
     }
     function wrappedLrcCursorToLrcCursor(c)
     {
         var lc /*lrcCursor*/ = 0;
-        for(var i = 0; i <= c[0]; i++)
-            if(!(lrcDisplay.wrappedText.charAt(i) == '\n')) lc++;
+        var numOfNonLineBreakChar = lrcDisplay.wrappedText.substring(0,c[0]+1).replace(/\n/g,"").length;
+        for(var i = 0; lc < lrc.length; lc++) 
+            if(lrc.substring(0,lc+1).replace(/\n/g,"").length == numOfNonLineBreakChar) break;
         if(c.length == 1) return [lc];
         else if(c.length == 2) return [lc, lc + (c[1] - c[0])];
     }
@@ -922,6 +924,7 @@ MuseScore
     property var newlinePositions: [0]
     function getDisplayPositionMap()
     {
+        separatorsWidth = [];
         //calculates all separators' horizontal width
         lrcDisplayDummy.text = convertLineBreak("1");
         for(var i = 0; i < separator.length; i++)
@@ -933,6 +936,7 @@ MuseScore
         }
         console.log("Current separators: " + separator + ". separatorsWidth: " + separatorsWidth);
         
+        lineHeights = []; newlinePositions = []; 
         var lines = lrcDisplay.wrappedText.split(/(\n)/).filter(function(e){return e;});
         var mergedLines = [];
         for(var i = 0; i < lines.length; i++)
@@ -997,6 +1001,7 @@ MuseScore
         }
         if(!found) targetRowPos = newlinePositions[lineHeights.length]; //if user click is the EOF empty line
         console.log(targetRow);
+        console.log(targetRowPos);
 
         lrcDisplayDummy.text = ""; 
         for(var i = targetRowPos; i < txt.length; i++)
@@ -1004,9 +1009,9 @@ MuseScore
             //forcefully calculate the horizontal size of lyrics by append characters to the invisible lrcDisplayDummy
             //THIS IS SUCH A DIRTY WORKAROUND
             //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap trailing whitespaces here:
-            lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/\s+$/gm, ' '); 
-            if(lrcDisplayDummy.text.startsWith("<br />")) lrcDisplayDummy.text = lrcDisplayDummy.text.substring(6);
-            if(lrcDisplayDummy.text == "") return -1; //if empty line then directly return not found.
+            lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/ /g, " "); 
+            console.log(lrcDisplayDummy.text);
+            if(lrcDisplayDummy.text == "<br />") return -1; //if empty line then directly return not found.
             //console.log("buffered text: " + lrcDisplayDummy.text)
             if(posX < lrcDisplayDummy.width) 
             {
@@ -1331,7 +1336,7 @@ MuseScore
                 width: syllableButton.width/4
                 onClicked:
                 {
-                    var original = lrcCursor;
+                    var original = lrcCursorClone(lrcCursor);
                     prevChar();
                     updateDisplay();
                     pushToUndoStack(false, "彁:" + lrcCursorToString(original) + "->" + lrcCursorToString(lrcCursor));
@@ -1370,9 +1375,11 @@ MuseScore
                 text: "<font size=\"5\">▶</font>"
                 width: syllableButton.width/4
                 onClicked:
-                {   
-                    var original = lrcCursor;
+                {   console.log("lrcStepForwardButton.onClicked()");
+                    var original = lrcCursorClone(lrcCursor);
+                    console.log("before nextChar(): " + lrcCursor);
                     nextChar();
+                    console.log("after nextChar(): " + lrcCursor);
                     updateDisplay();
                     pushToUndoStack(false, "彁:" + lrcCursorToString(original) + "->" + lrcCursorToString(lrcCursor));
                 }
@@ -1448,8 +1455,7 @@ MuseScore
                 function wrap()
                 {
                     var lines = lrc.split(/(\n)/).filter(function(e){return e;});
-                    console.log("aaa:" + lines);
-                    for(var i = 0; i < lines.Length; i++)
+                    for(var i = 0; i < lines.length; i++)
                     {
                         if(lines[i] == "\n") continue;
                         else lines[i] = wrapline(lines[i]);
@@ -1788,7 +1794,7 @@ MuseScore
                         lrcDisplay.font.pointSize = ptSize + (1 * Math.sign(wheelIncrement));
                         //if pointSize's vertical increment not found in the cache, save one otherwise just retrieve it
                         if(lrcDisplay.displayPositionMapCache[ptSize]) lrcDisplay.retrieveCache(ptSize);
-                        else getDisplayPositionMap();
+                        else {lrcDisplay.wrap(); getDisplayPositionMap();}
                         wheelIncrement = 0;
                      }
                 } wheel.accepted=true;
@@ -2016,7 +2022,9 @@ MuseScore
         }
     }
 
-    //Button{id:testBTN; text: "test!"; onClicked:{console.log();} }
+    Button{id:testBTN; text: "test!"; onClicked:{
+    console.log("lrc" + lrc);
+    console.log("wrappedlrc" + lrcDisplay.wrappedText);} }
 
     //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
     //such as English Hyphenation and Japanese Kanji to Kana
