@@ -807,22 +807,42 @@ MuseScore
     function convertWhiteSpace(x) { return x.replace(/\s/g, "&nbsp;"); } //convert whitespaces in HTML &nbsp;
 
     function lrcCursorToWrappedLrcCursor(c)
-    {
-        var wlc /*Wrapped lrcCursor*/ = 0; 
-        var numOfNonLineBreakChar = lrc.substring(0,c[0]+1).replace(/\n/g,"").length;
-        for(var i = 0; wlc < lrcDisplay.wrappedText.length; wlc++) 
-            if(lrcDisplay.wrappedText.substring(0,wlc+1).replace(/\n/g,"").length == numOfNonLineBreakChar) break;
-        if(c.length == 1) return [wlc]; 
-        else if(c.length == 2) return [wlc, wlc + (c[1] - c[0])];
+    {   
+        const wlrc = lrcDisplay.wrappedText;
+        //i1: the lrcCursor in lrc; i2: the lrcCursor in lrcDisplay.wrappedText (wlrc)
+        //n1: num of non-'\n' chars from lrc.substring(0, i1 + 1); n2: num of non-'\n' chars from wlrc.substring(0, i1 + 1)
+        const i1 = c[0];
+        var i2 = i1;
+        while (wlrc.charAt(i2) == '\n') i2 += 1; //skip the lrcCursor in @wlrc to the nearest non-'\n' char
+        const n1 = lrc.substring(0, i1 + 1).replace(/\n/g,"").length; 
+        var n2 = wlrc.substring(0, i2 + 1).replace(/\n/g,"").length; 
+        for(; i2 < wlrc.length /*prevent dead loops*/; i2++) 
+        {
+            if(n2 >= n1) break;
+            if(wlrc.charAt(i2) != '\n') n2 += 1;
+        }
+        if(c.length == 1) return [i2]; 
+        else if(c.length == 2) return [i2, i2 + (c[1] - c[0])];
     }
     function wrappedLrcCursorToLrcCursor(c)
-    {
-        var lc /*lrcCursor*/ = 0;
-        var numOfNonLineBreakChar = lrcDisplay.wrappedText.substring(0,c[0]+1).replace(/\n/g,"").length;
-        for(var i = 0; lc < lrc.length; lc++) 
-            if(lrc.substring(0,lc+1).replace(/\n/g,"").length == numOfNonLineBreakChar) break;
-        if(c.length == 1) return [lc];
-        else if(c.length == 2) return [lc, lc + (c[1] - c[0])];
+    {   //reversed logic of lrcCursorToWrappedLrcCursor(c)
+        const wlrc = lrcDisplay.wrappedText;
+        const i2 = c[0];
+        var i1 = (i2 > lrc.length) ? lrc.length - 1 : i2;
+        while (lrc.charAt(i1) == '\n') i1 -= 1; //skip the lrcCursor in @lrc to the nearest non-'\n' char
+        const n2 = wlrc.substring(0, i2 + 1).replace(/\n/g,"").length; 
+        var n1 = lrc.substring(0, i1 + 1).replace(/\n/g,"").length;
+        for(; i1 > 0 /*prevent dead loops*/; i1--)
+        {
+            if(n1 <= n2) 
+            {
+                while (lrc.charAt(i1) == '\n') i1 -= 1; //skip all '\n'
+                break;
+            }
+            if(lrc.charAt(i1) != '\n') n1 -= 1;
+        }
+        if(c.length == 1) return [i1]; 
+        else if(c.length == 2) return [i1, i1 + (c[1] - c[0])];
     }
     function updateDisplay() //update display to lrcDisplay.text
     {
@@ -2022,9 +2042,7 @@ MuseScore
         }
     }
 
-    Button{id:testBTN; text: "test!"; onClicked:{
-    console.log("lrc" + lrc);
-    console.log("wrappedlrc" + lrcDisplay.wrappedText);} }
+    //Button{id:testBTN; text: "test!"; onClicked:{console.log();} }
 
     //suspend and release UI functions to avoid glitches caused by users clicking around in content requesting process
     //such as English Hyphenation and Japanese Kanji to Kana
