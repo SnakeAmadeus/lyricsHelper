@@ -113,7 +113,7 @@ MuseScore
     function acceptLyrics(text)
     {
         //update lyrics text to the display:
-        lrc = text.replace(/\ /gm, ' ');
+        lrc = text.replace(/ +/g, ' ');
         lrcDisplay.wrap(); 
         lrcDisplay.width = lrcDisplayScrollView.width;
         if(lrcCursor.length == 1) lrcCursor = [0]; else {lrcCursor = [0,1]; expandCharToWord(0);}//reset @lrcCursor
@@ -1009,7 +1009,6 @@ MuseScore
     }
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
-        var txt = lrcDisplay.wrappedText;
         var targetRow = 0; //targetRow #
         var targetRowPos = 0; //targetRow's starting index in lrc
 
@@ -1020,37 +1019,35 @@ MuseScore
             if(sum > posY) {targetRowPos = newlinePositions[i]; targetRow = i; found = true; /*found mark*/ break;}
         }
         if(!found) targetRowPos = newlinePositions[lineHeights.length]; //if user click is the EOF empty line
-        console.log(targetRow);
-        console.log(targetRowPos);
+        console.log("calculated target row: " + targetRow + ", starts at index: " + targetRowPos);
 
         lrcDisplayDummy.text = ""; 
-        for(var i = targetRowPos; i < txt.length; i++)
+        for(var i = targetRowPos; i < lrc.length; i++)
         {
             //forcefully calculate the horizontal size of lyrics by append characters to the invisible lrcDisplayDummy
             //THIS IS SUCH A DIRTY WORKAROUND
             //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap trailing whitespaces here:
-            lrcDisplayDummy.text = convertLineBreak(lrcDisplayDummy.text + String(txt.charAt(i))).replace(/ /g, " "); 
-            console.log(lrcDisplayDummy.text);
+            lrcDisplayDummy.text = convertLineBreak((lrcDisplayDummy.text + lrc.charAt(i)).replace(/　+/g, " "));
             if(lrcDisplayDummy.text == "<br />") return -1; //if empty line then directly return not found.
             //console.log("buffered text: " + lrcDisplayDummy.text)
             if(posX < lrcDisplayDummy.width) 
             {
-                if(isSeparator(txt.charAt(i))) //if user selects a whitespace, snap to the nearest character
+                if(isSeparator(lrc.charAt(i))) //if user selects a whitespace, snap to the nearest character
                 {
                     //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
-                    if(i == 0 || i == txt.length - 1) return -1; 
-                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) == '\n' ) return -1;
-                    if(txt.charAt(i-1) == '\n' && txt.charAt(i+1) != '\n' ) return getNextAvailableCharPos(i, 1);
-                    if(txt.charAt(i-1) != '\n' && txt.charAt(i+1) == '\n' ) return getNextAvailableCharPos(i, -1);
+                    if(i == 0 || i == lrc.length - 1) return -1; 
+                    if(lrc.charAt(i-1) == '\n' && lrc.charAt(i+1) == '\n' ) return -1;
+                    if(lrc.charAt(i-1) == '\n' && lrc.charAt(i+1) != '\n' ) return getNextAvailableCharPos(i, 1);
+                    if(lrc.charAt(i-1) != '\n' && lrc.charAt(i+1) == '\n' ) return getNextAvailableCharPos(i, -1);
                     //snap to the nearest character (use prevChar() and nextChar() to also skip all the nearest whitespaces)
-                    if(posX - (lrcDisplayDummy.width - lrcDisplay.separatorsWidth[parseInt(isSeparator(txt.charAt(i)))]) < lrcDisplayDummy.width - posX)
+                    if(posX - (lrcDisplayDummy.width - separatorsWidth[parseInt(isSeparator(lrc.charAt(i)))]) < lrcDisplayDummy.width - posX)
                         return getNextAvailableCharPos(i, -1);
                     else
                         return getNextAvailableCharPos(i, 1);
                 }    
-                return wrappedLrcCursorToLrcCursor([i])[0]; //found!
+                return i; //found!
             } //if reach the EOF or not found a character in the given X position before going to next line:
-            if(i == txt.length - 1 || txt.charAt(i+1) == '\n' || i == newlinePositions[targetRow+1]) return -1; 
+            if(i == lrc.length - 1 || lrc.charAt(i+1) == '\n' || i == newlinePositions[targetRow+1]) return -1; 
         }
         return -1;
     }
@@ -1453,9 +1450,15 @@ MuseScore
                         {
                             console.log("Mouse clicked at X:" + mouse.x + " Y:" + mouse.y);
                             var original = lrcCursorClone(lrcCursor);
+                            //temporarily change lrc's content to lrcDisplay.wrappedText so the findChar(x,y) process the lyrics text on the display 
+                            var temp = [lrc];
+                            lrc = lrcDisplay.wrappedText;
                             var found = findChar(mouse.x, mouse.y);
+                            lrc = temp[0];
+
                             if(found != -1) 
                             {
+                                found = wrappedLrcCursorToLrcCursor([found])[0]; //convert the cursor on the display to the actually lrcCursor in lrc
                                 if(lrcCursor.length == 1) lrcCursor[0] = found;
                                 else if(lrcCursor.length == 2) expandCharToWord(found);
                                 // Also push the lrcCursor change event to the undo_stack, so we can trace lrcCursor's position back
