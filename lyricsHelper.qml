@@ -137,8 +137,6 @@ MuseScore
             lyricsLineNumIndicatorPrompt.start();
             isFirstRun = false;
         }
-        //resize the panel
-        controls.height = lyricSourceControl.height + inputButtons.height + lrcDisplayScrollView.height;
         //clean vertical increment cache
         lrcDisplay.displayPositionMapCache = {};
         getDisplayPositionMap();
@@ -811,23 +809,27 @@ MuseScore
         const wlrc = lrcDisplay.wrappedText;
         //i1: the lrcCursor in lrc; i2: the lrcCursor in lrcDisplay.wrappedText (wlrc)
         //n1: num of non-'\n' chars from lrc.substring(0, i1 + 1); n2: num of non-'\n' chars from wlrc.substring(0, i1 + 1)
-        const i1 = c[0];
+        const i1 = c;
         var i2 = i1;
         while (wlrc.charAt(i2) == '\n') i2 += 1; //skip the lrcCursor in @wlrc to the nearest non-'\n' char
         const n1 = lrc.substring(0, i1 + 1).replace(/\n/g,"").length; 
         var n2 = wlrc.substring(0, i2 + 1).replace(/\n/g,"").length; 
         for(; i2 < wlrc.length /*prevent dead loops*/; i2++) 
         {
-            if(n2 >= n1) break;
+            if(n2 >= n1) 
+            {
+                while(wlrc.charAt(i2) == '\n' && i2 < wlrc.length) i2 += 1; //skip all '\n'
+                break;
+            }
             if(wlrc.charAt(i2) != '\n') n2 += 1;
         }
-        if(c.length == 1) return [i2]; 
-        else if(c.length == 2) return [i2, i2 + (c[1] - c[0])];
+        if(lrc.charAt(i1) == '\n') i2 += 1; //for lrcCursor[1] that possible is \n
+        return i2; 
     }
     function wrappedLrcCursorToLrcCursor(c)
     {   //reversed logic of lrcCursorToWrappedLrcCursor(c)
         const wlrc = lrcDisplay.wrappedText;
-        const i2 = c[0];
+        const i2 = c;
         var i1 = (i2 > lrc.length) ? lrc.length - 1 : i2;
         while (lrc.charAt(i1) == '\n') i1 -= 1; //skip the lrcCursor in @lrc to the nearest non-'\n' char
         const n2 = wlrc.substring(0, i2 + 1).replace(/\n/g,"").length; 
@@ -836,57 +838,59 @@ MuseScore
         {
             if(n1 <= n2) 
             {
-                while (lrc.charAt(i1) == '\n') i1 -= 1; //skip all '\n'
+                while (lrc.charAt(i1) == '\n' && i1 > 0) i1 -= 1; //skip all '\n'
                 break;
             }
             if(lrc.charAt(i1) != '\n') n1 -= 1;
         }
-        if(c.length == 1) return [i1]; 
-        else if(c.length == 2) return [i1, i1 + (c[1] - c[0])];
+        return i1; 
     }
     function updateDisplay() //update display to lrcDisplay.text
     {
         if(isOnlyContainsSeparator()) {lrcDisplay.text = qsTr("Error: your lyrics file only contains\nwhitespaces or separators like \'-\'!"); return false;}
-        
-        var temp = [lrcCursor, lrc];
-        lrcCursor = lrcCursorToWrappedLrcCursor(lrcCursor);
-        lrc = lrcDisplay.wrappedText;
+           
+        var temp = [lrcCursor];
+        if(lrcCursor.length == 1) lrcCursor = [lrcCursorToWrappedLrcCursor(lrcCursor[0])];
+        else if(lrcCursor.length == 2) lrcCursor = [lrcCursorToWrappedLrcCursor(lrcCursor[0]), lrcCursorToWrappedLrcCursor(lrcCursor[1])];
+        const wlrc = lrcDisplay.wrappedText;
 
         if(lrcCursor.length == 1) //if the selected text is single char (normal case)
         {
             if(lrcCursor[0] == 0)
             {
-                lrcDisplay.text = convertLineBreak("<b>" + lrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + lrc.slice(1) + "</font>");
+                lrcDisplay.text = convertLineBreak("<b>" + wlrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + wlrc.slice(1) + "</font>");
             }
-            else if(lrcCursor[0] == lrc.length - 1)
+            else if(lrcCursor[0] == wlrc.length - 1)
             {
-                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0]) + "</b>");
+                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + wlrc.slice(0, lrcCursor[0]) + "</font>" + "<b>" + wlrc.slice(lrcCursor[0]) + "</b>");
             }
             else
             {
-                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0], lrcCursor[0] + 1) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[0] + 1) + "</font>");
+                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + wlrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + wlrc.slice(lrcCursor[0], lrcCursor[0] + 1) + "</b>" + "<font color=\"grey\">" + wlrc.slice(lrcCursor[0] + 1) + "</font>");
             }
         }
         else if(lrcCursor.length == 2) //if the selected text is more than one char (like in hyphenated mode)
         {
             if(lrcCursor[1] == 1)
             {
-                lrcDisplay.text = convertLineBreak("<b>" + lrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[1]) + "</font>");
+                lrcDisplay.text = convertLineBreak("<b>" + wlrc.slice(0,1) + "</b>" + "<font color=\"grey\">" + wlrc.slice(lrcCursor[1]) + "</font>");
             }
-            else if(lrcCursor[1] >= lrc.length - 1)
+            else if(lrcCursor[1] >= wlrc.length - 1)
             {
-                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0, lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0]) + "</b>");
+                lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + wlrc.slice(0, lrcCursor[0]) + "</font>" + "<b>" + wlrc.slice(lrcCursor[0]) + "</b>");
             }
             else
             {
                 if(lrcCursor[0] == lrcCursor[1])
-                    lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + lrc.charAt(lrcCursor[0]) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[1]) + "</font>");
+                    lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + wlrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + wlrc.charAt(lrcCursor[0]) + "</b>" + "<font color=\"grey\">" + wlrc.slice(lrcCursor[1]) + "</font>");
                 else
-                    lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + lrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + lrc.slice(lrcCursor[0], lrcCursor[1]) + "</b>" + "<font color=\"grey\">" + lrc.slice(lrcCursor[1]) + "</font>");
+                    lrcDisplay.text = convertLineBreak("<font color=\"grey\">" + wlrc.slice(0,lrcCursor[0]) + "</font>" + "<b>" + wlrc.slice(lrcCursor[0], lrcCursor[1]) + "</b>" + "<font color=\"grey\">" + wlrc.slice(lrcCursor[1]) + "</font>");
             }
         }
-
-        lrcCursor = temp[0]; lrc = temp[1];
+        //refresh the height of lrcDisplayMenuMouseArea, add averageLineHeight because the ScrollView's height value is slightly shorter than what it seems like
+        lrcDisplayMenuMouseArea.height = (lrcDisplay.height > lrcDisplayScrollView.height ? 
+                                        (lrcDisplayScrollView.height + Math.ceil(averageLineHeight)) : lrcDisplay.height);
+        lrcCursor = temp[0];
     }
 
     //Basic Lyrics Selection Functions:
@@ -895,42 +899,42 @@ MuseScore
         for(var i = 0; i < lrc.length; i++) {if((lrc.charAt(i)) != '\n' && !isSeparator(lrc.charAt(i))) return false;}
         return true;
     }
-    function getNextAvailableCharPos(pos, direction) //from the @lrcCursor, searching the position of next non-'\n',-whitespace, or -separator char in the lyrics
+    function getNextAvailableCharPos(text, pos, direction) //from the @lrcCursor, searching the position of next non-'\n',-whitespace, or -separator char in the lyrics
     {
         for(var i = pos + direction; i != pos; i += direction)
         {
-            if((direction == 1) && (i >= lrc.length)) i = 0;
-            if((direction == -1) && (i < 0)) i = lrc.length - 1;
-            if ((lrc.charAt(i)) == '\n' || isSeparator(lrc.charAt(i))) continue; else return i;
+            if((direction == 1) && (i >= text.length)) i = 0;
+            if((direction == -1) && (i < 0)) i = text.length - 1;
+            if ((text.charAt(i)) == '\n' || isSeparator(text.charAt(i))) continue; else return i;
         }
     }
-    function getNextSeparatorPos(pos, direction) //from the @lrcCursor, searching the position of next '\n', whitespace, or separator in the lyrics
+    function getNextSeparatorPos(text, pos, direction) //from the @lrcCursor, searching the position of next '\n', whitespace, or separator in the lyrics
     {
         for(var i = pos + direction; i != pos; i += direction)
         {
-            if((direction == 1) && (i >= lrc.length)) return i;
+            if((direction == 1) && (i >= text.length)) return i;
             if((direction == -1) && (i < 0)) return -1;
-            if((lrc.charAt(i)) != '\n' && !isSeparator(lrc.charAt(i))) continue; else return i;
+            if((text.charAt(i)) != '\n' && !isSeparator(text.charAt(i))) continue; else return i;
         }
     }
     function expandCharToWord(charPos) //selects the word that selected character belongs to
     {
         //if the the char that is to expand is a '\n' or separator, find the next available char first then expand.
-        if ((lrc.charAt(charPos)) == '\n' || isSeparator(lrc.charAt(charPos))) charPos = getNextAvailableCharPos(charPos, 1);
-        lrcCursor[0] = getNextSeparatorPos(charPos, -1) + 1;
-        lrcCursor[1] = getNextSeparatorPos(charPos, 1);
+        if ((lrc.charAt(charPos)) == '\n' || isSeparator(lrc.charAt(charPos))) charPos = getNextAvailableCharPos(lrc, charPos, 1);
+        lrcCursor[0] = getNextSeparatorPos(lrc, charPos, -1) + 1;
+        lrcCursor[1] = getNextSeparatorPos(lrc, charPos, 1);
     }
     function nextChar() //advancing the @lrcCursor forward by skipping the @seperator to the next selection
     {
-        if(lrcCursor.length == 1) lrcCursor[0] = getNextAvailableCharPos(lrcCursor[0], 1); //if the selected text is single char (normal case)
+        if(lrcCursor.length == 1) lrcCursor[0] = getNextAvailableCharPos(lrc, lrcCursor[0], 1); //if the selected text is single char (normal case)
         else if(lrcCursor.length == 2) //if the selected text is more than one char (like in hyphenated mode)
-            expandCharToWord(getNextAvailableCharPos(lrcCursor[1], 1));
+            expandCharToWord(getNextAvailableCharPos(lrc, lrcCursor[1], 1));
     }
     function prevChar() //stepping the @lrcCursor back by a word or syllable, same structure as the nextChar() above
     {
-        if(lrcCursor.length == 1) lrcCursor[0] = getNextAvailableCharPos(lrcCursor[0], -1); //if the selected text is single char (normal case)
+        if(lrcCursor.length == 1) lrcCursor[0] = getNextAvailableCharPos(lrc, lrcCursor[0], -1); //if the selected text is single char (normal case)
         else if(lrcCursor.length == 2) //if the selected text is more than one char (like in hyphenated mode)
-            expandCharToWord(getNextAvailableCharPos(lrcCursor[0], -1));
+            expandCharToWord(getNextAvailableCharPos(lrc, lrcCursor[0], -1));
     }
 
     //@lineHeights: the vertical height of each line (in px), use to locate user clicked character's line number
@@ -942,6 +946,7 @@ MuseScore
     property var lineHeights: []
     property var separatorsWidth: []
     property var newlinePositions: [0]
+    property var averageLineHeight: 0;
     function getDisplayPositionMap()
     {
         separatorsWidth = [];
@@ -975,10 +980,9 @@ MuseScore
             indexOfI += lines[i].length;
         }
 
-        console.log("lineHeights: " + lineHeights);
+        averageLineHeight = lineHeights.reduce(function(acc, val) { return acc + val; }, 0) / (lineHeights.length);
+        console.log("lineHeights: " + lineHeights + ", averageLineHeight: " + averageLineHeight);
         console.log("newlinePositions: " + newlinePositions);
-        for(var i = 1; i < newlinePositions.length; i++) 
-            console.log("line: " + i + "；content: \""+ lrcDisplay.wrappedText.substring(newlinePositions[i-1],newlinePositions[i]) + "\"");
         lrcDisplay.cache(ptSize);
     }
     function hasNonLatinChar(s) { return /^[A-z\u00C0-\u00ff]|[,.\/#!$%\^&\*;:{}=\-_`~()]+$/.test(s); }
@@ -1009,8 +1013,9 @@ MuseScore
     }
     function findChar(posX, posY) //finds char in the given X, Y in lrcDisplay. @return: lrcCursor index of found character
     {
+        const wlrc = lrcDisplay.wrappedText; //wrapped lrc
         var targetRow = 0; //targetRow #
-        var targetRowPos = 0; //targetRow's starting index in lrc
+        var targetRowPos = 0; //targetRow's starting index in wlrc
 
         var sum = 0; var found = false;
         for(var i = 0; i < lineHeights.length; i++)
@@ -1022,32 +1027,32 @@ MuseScore
         console.log("calculated target row: " + targetRow + ", starts at index: " + targetRowPos);
 
         lrcDisplayDummy.text = ""; 
-        for(var i = targetRowPos; i < lrc.length; i++)
+        for(var i = targetRowPos; i < wlrc.length; i++)
         {
             //forcefully calculate the horizontal size of lyrics by append characters to the invisible lrcDisplayDummy
             //THIS IS SUCH A DIRTY WORKAROUND
             //trim trailing spaces and wrap line breaks to avoid problems, because HTML doesn't wrap trailing whitespaces here:
-            lrcDisplayDummy.text = convertLineBreak((lrcDisplayDummy.text + lrc.charAt(i)).replace(/　+/g, " "));
+            lrcDisplayDummy.text = convertLineBreak((lrcDisplayDummy.text + wlrc.charAt(i)).replace(/　+/g, " "));
             if(lrcDisplayDummy.text == "<br />") return -1; //if empty line then directly return not found.
             //console.log("buffered text: " + lrcDisplayDummy.text)
             if(posX < lrcDisplayDummy.width) 
             {
-                if(isSeparator(lrc.charAt(i))) //if user selects a whitespace, snap to the nearest character
+                if(isSeparator(wlrc.charAt(i))) //if user selects a whitespace, snap to the nearest character
                 {
                     //if the whitespace is the head or tail of the lyrics, ignore to avoid outOfIndex error
-                    if(i == 0 || i == lrc.length - 1) return -1; 
-                    if(lrc.charAt(i-1) == '\n' && lrc.charAt(i+1) == '\n' ) return -1;
-                    if(lrc.charAt(i-1) == '\n' && lrc.charAt(i+1) != '\n' ) return getNextAvailableCharPos(i, 1);
-                    if(lrc.charAt(i-1) != '\n' && lrc.charAt(i+1) == '\n' ) return getNextAvailableCharPos(i, -1);
+                    if(i == 0 || i == wlrc.length - 1) return -1; 
+                    if(wlrc.charAt(i-1) == '\n' && wlrc.charAt(i+1) == '\n' ) return -1;
+                    if(wlrc.charAt(i-1) == '\n' && wlrc.charAt(i+1) != '\n' ) return getNextAvailableCharPos(wlrc, i, 1);
+                    if(wlrc.charAt(i-1) != '\n' && wlrc.charAt(i+1) == '\n' ) return getNextAvailableCharPos(wlrc, i, -1);
                     //snap to the nearest character (use prevChar() and nextChar() to also skip all the nearest whitespaces)
-                    if(posX - (lrcDisplayDummy.width - separatorsWidth[parseInt(isSeparator(lrc.charAt(i)))]) < lrcDisplayDummy.width - posX)
-                        return getNextAvailableCharPos(i, -1);
+                    if(posX - (lrcDisplayDummy.width - separatorsWidth[parseInt(isSeparator(wlrc.charAt(i)))]) < lrcDisplayDummy.width - posX)
+                        return getNextAvailableCharPos(wlrc, i, -1);
                     else
-                        return getNextAvailableCharPos(i, 1);
+                        return getNextAvailableCharPos(wlrc, i, 1);
                 }    
                 return i; //found!
             } //if reach the EOF or not found a character in the given X position before going to next line:
-            if(i == lrc.length - 1 || lrc.charAt(i+1) == '\n' || i == newlinePositions[targetRow+1]) return -1; 
+            if(i == wlrc.length - 1 || wlrc.charAt(i+1) == '\n' || i == newlinePositions[targetRow+1]) return -1; 
         }
         return -1;
     }
@@ -1427,6 +1432,13 @@ MuseScore
                 wrapMode: Text.NoWrap
                 textFormat: Text.RichText
                 width: lrcDisplayScrollView.width
+                Text
+                {
+                    id: lrcCursorDisplay
+                    enabled: true; visible: true;
+                    textFormat: Text.RightText
+                    font.pointSize: lrcDisplay.font.pointSize; font.family: lrcDisplay.font.family;
+                }
                 MouseArea
                 {
                     id: lrcDisplayMouseArea //MouseArea for Clickable Lyrics Function
@@ -1450,15 +1462,11 @@ MuseScore
                         {
                             console.log("Mouse clicked at X:" + mouse.x + " Y:" + mouse.y);
                             var original = lrcCursorClone(lrcCursor);
-                            //temporarily change lrc's content to lrcDisplay.wrappedText so the findChar(x,y) process the lyrics text on the display 
-                            var temp = [lrc];
-                            lrc = lrcDisplay.wrappedText;
                             var found = findChar(mouse.x, mouse.y);
-                            lrc = temp[0];
 
                             if(found != -1) 
                             {
-                                found = wrappedLrcCursorToLrcCursor([found])[0]; //convert the cursor on the display to the actually lrcCursor in lrc
+                                found = wrappedLrcCursorToLrcCursor(found); //convert the cursor on the display to the actually lrcCursor in lrc
                                 if(lrcCursor.length == 1) lrcCursor[0] = found;
                                 else if(lrcCursor.length == 2) expandCharToWord(found);
                                 // Also push the lrcCursor change event to the undo_stack, so we can trace lrcCursor's position back
@@ -1469,6 +1477,7 @@ MuseScore
                             }
                             else console.log("given position has no char!");
                             updateDisplay();
+                            
                             doubleClickTimer.start();
                         }
                     }
@@ -1484,7 +1493,6 @@ MuseScore
                         else lines[i] = wrapline(lines[i]);
                     }
                     wrappedText = lines.join('');
-                    updateDisplay();
                 }
                 function wrapline(line)
                 {
@@ -1542,6 +1550,7 @@ MuseScore
                     separatorsWidth = displayPositionMapCache[fontSize][1];
                     newlinePositions = displayPositionMapCache[fontSize][2];
                     wrappedText = displayPositionMapCache[fontSize][3];
+                    averageLineHeight = lineHeights.reduce(function(acc, val) { return acc + val; }, 0) / (lineHeights.length);
                     updateDisplay();
                 }
             }
@@ -1817,7 +1826,7 @@ MuseScore
                         lrcDisplay.font.pointSize = ptSize + (1 * Math.sign(wheelIncrement));
                         //if pointSize's vertical increment not found in the cache, save one otherwise just retrieve it
                         if(lrcDisplay.displayPositionMapCache[ptSize]) lrcDisplay.retrieveCache(ptSize);
-                        else {lrcDisplay.wrap(); getDisplayPositionMap();}
+                        else {lrcDisplay.wrap(); getDisplayPositionMap(); updateDisplay();}
                         wheelIncrement = 0;
                      }
                 } wheel.accepted=true;
