@@ -810,20 +810,20 @@ MuseScore
         //i1: the lrcCursor in lrc; i2: the lrcCursor in lrcDisplay.wrappedText (wlrc)
         //n1: num of non-'\n' chars from lrc.substring(0, i1 + 1); n2: num of non-'\n' chars from wlrc.substring(0, i1 + 1)
         const i1 = c;
+        const isLrcCursorRightBound = (lrc.charAt(i1) == '\n'); //if lrc.charAt(i1) is a linebreak, it has to be the right boundary of lrcCursor range selection (lrcCursor[1])
+        if(isLrcCursorRightBound) while(lrc.charAt(i1) == '\n' && i1 > 0) i1 -= 1; //snap i1 to the nearest char first
+
         var i2 = i1;
-        while (wlrc.charAt(i2) == '\n') i2 += 1; //skip the lrcCursor in @wlrc to the nearest non-'\n' char
+        while (wlrc.charAt(i2) == '\n' && i2 < wlrc.length) i2 += 1; //skip the lrcCursor in @wlrc to the nearest non-'\n' char
         const n1 = lrc.substring(0, i1 + 1).replace(/\n/g,"").length; 
-        var n2 = wlrc.substring(0, i2 + 1).replace(/\n/g,"").length; 
-        for(; i2 < wlrc.length /*prevent dead loops*/; i2++) 
+        var n2 = wlrc.substring(0, i2 + 1).replace(/\n/g,"").length;
+        while(i2 < wlrc.length /*prevent dead loops*/ && (n2 < n1))
         {
-            if(n2 >= n1) 
-            {
-                while(wlrc.charAt(i2) == '\n' && i2 < wlrc.length) i2 += 1; //skip all '\n'
-                break;
-            }
+            i2 += 1;
             if(wlrc.charAt(i2) != '\n') n2 += 1;
         }
-        if(lrc.charAt(i1) == '\n') i2 += 1; //for lrcCursor[1] that possible is \n
+        //if lrc.charAt(i1) is '\n', then wlrc.charAt(i2) has to be '\n' in order to let display include the char at L-boundary
+        if(isLrcCursorRightBound) while(wlrc.charAt(i2) != '\n' && i2 < wlrc.length) i2 += 1;
         return i2; 
     }
     function wrappedLrcCursorToLrcCursor(c)
@@ -831,18 +831,15 @@ MuseScore
         const wlrc = lrcDisplay.wrappedText;
         const i2 = c;
         var i1 = (i2 > lrc.length) ? lrc.length - 1 : i2;
-        while (lrc.charAt(i1) == '\n') i1 -= 1; //skip the lrcCursor in @lrc to the nearest non-'\n' char
+        while (lrc.charAt(i1) == '\n' && i1 > 0) i1 -= 1; //skip the lrcCursor in @lrc to the nearest non-'\n' char
         const n2 = wlrc.substring(0, i2 + 1).replace(/\n/g,"").length; 
         var n1 = lrc.substring(0, i1 + 1).replace(/\n/g,"").length;
-        for(; i1 > 0 /*prevent dead loops*/; i1--)
+        while(i1 > 0 /*prevent dead loops*/ && n1 > n2)
         {
-            if(n1 <= n2) 
-            {
-                while (lrc.charAt(i1) == '\n' && i1 > 0) i1 -= 1; //skip all '\n'
-                break;
-            }
             if(lrc.charAt(i1) != '\n') n1 -= 1;
+            i1 -= 1;
         }
+        while(lrc.charAt(i1) == '\n' && i1 > 0) i1 -= 1;
         return i1; 
     }
     function updateDisplay() //update display to lrcDisplay.text
